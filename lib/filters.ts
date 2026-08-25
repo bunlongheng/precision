@@ -56,6 +56,19 @@ export const PRESETS: Preset[] = [
   preset("fade", "Fade", { saturate: 78, contrast: 88, brightness: 110 }),
   preset("punch", "Punch", { contrast: 128, saturate: 128 }),
   preset("dream", "Dream", { blur: 1.2, brightness: 108, saturate: 115 }),
+  // Cooler, more cinematic looks
+  preset("cinema", "Cinema", { contrast: 118, saturate: 106, hue: -6, brightness: 97 }),
+  preset("frost", "Frost", { hue: 20, saturate: 88, brightness: 109, contrast: 96 }),
+  preset("golden", "Golden", { sepia: 28, saturate: 122, brightness: 106, hue: -12 }),
+  preset("moody", "Moody", { brightness: 90, contrast: 122, saturate: 82 }),
+  preset("matte", "Matte", { contrast: 86, brightness: 106, saturate: 92, sepia: 12 }),
+  preset("retro", "Retro", { sepia: 38, saturate: 116, contrast: 106, hue: -14 }),
+  preset("aqua", "Aqua", { hue: 28, saturate: 116, brightness: 103, contrast: 104 }),
+  preset("neon", "Neon", { saturate: 168, contrast: 122, hue: 10 }),
+  preset("blush", "Blush", { hue: -16, saturate: 112, brightness: 107, contrast: 98 }),
+  preset("mint", "Mint", { hue: 34, saturate: 104, brightness: 105, contrast: 99 }),
+  preset("steel", "Steel", { grayscale: 32, hue: 14, contrast: 110, brightness: 101 }),
+  preset("sunset", "Sunset", { sepia: 32, hue: -16, saturate: 128, brightness: 105 }),
 ];
 
 export function getPreset(id: string): Preset | undefined {

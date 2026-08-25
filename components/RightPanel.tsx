@@ -1,11 +1,15 @@
 "use client";
 
+import { useMemo } from "react";
 import type { EditorDoc, Adjust, Layer, TextLayer, ImageLayer } from "@/lib/types";
 import { PRESETS } from "@/lib/filters";
 import { COLLAGE_LIST } from "@/lib/collage";
+import { fitCover } from "@/lib/geometry";
+import type { ImageResolver } from "./render";
 import type { BrushState, ToolId } from "./editor-types";
 import { Slider, Segmented, PanelSection, Swatch } from "./ui";
 import { TrashIcon, LayersIcon } from "./icons";
+import FilterThumb from "./FilterThumb";
 
 const PALETTE = ["#ffffff", "#0d0d0f", "#c9f24d", "#ff6a4d", "#4d9dff", "#ffd23f", "#ff4da6"];
 const FONTS = [
@@ -20,6 +24,8 @@ type Props = {
   selected: Layer | null;
   brush: BrushState;
   brushCanUndo: boolean;
+  resolve: ImageResolver;
+  imgVersion: number;
   onAdjust: (patch: Partial<Adjust>, commit: boolean) => void;
   onPreset: (a: Adjust) => void;
   onResetAdjust: () => void;
@@ -43,7 +49,16 @@ export default function RightPanel(p: Props) {
 
   return (
     <aside className="flex w-full shrink-0 flex-col overflow-y-auto border-t border-[var(--hairline)] bg-[var(--panel)] sm:w-[290px] sm:border-l sm:border-t-0">
-      {tool === "adjust" && <AdjustPanel doc={doc} onAdjust={p.onAdjust} onPreset={p.onPreset} onReset={p.onResetAdjust} />}
+      {tool === "adjust" && (
+        <AdjustPanel
+          doc={doc}
+          resolve={p.resolve}
+          imgVersion={p.imgVersion}
+          onAdjust={p.onAdjust}
+          onPreset={p.onPreset}
+          onReset={p.onResetAdjust}
+        />
+      )}
       {tool === "brush" && (
         <BrushPanel doc={doc} brush={p.brush} onBrush={p.onBrush} canUndo={p.brushCanUndo} onUndo={p.onBrushUndo} onClear={p.onBrushClear} />
       )}
@@ -59,11 +74,15 @@ export default function RightPanel(p: Props) {
 
 function AdjustPanel({
   doc,
+  resolve,
+  imgVersion,
   onAdjust,
   onPreset,
   onReset,
 }: {
   doc: EditorDoc;
+  resolve: ImageResolver;
+  imgVersion: number;
   onAdjust: (patch: Partial<Adjust>, commit: boolean) => void;
   onPreset: (a: Adjust) => void;
   onReset: () => void;
@@ -71,19 +90,44 @@ function AdjustPanel({
   const a = doc.adjust;
   const set = (k: keyof Adjust) => (v: number) => onAdjust({ [k]: v }, false);
   const commit = () => onAdjust({}, true);
+
+  // A small, unfiltered source of the user's own photo that every filter tile
+  // re-tints. Built once per image so 24 previews stay cheap.
+  const sample = useMemo(() => {
+    const src = doc.baseSrc ?? doc.cells.find((c) => c.src)?.src ?? null;
+    const img = src ? resolve(src) : null;
+    if (!img) return null;
+    const W = 200;
+    const H = 150;
+    const c = document.createElement("canvas");
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    const r = fitCover(img.naturalWidth, img.naturalHeight, W, H);
+    ctx.drawImage(img, r.x, r.y, r.w, r.h);
+    return c;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.baseSrc, doc.cells, imgVersion, resolve]);
+
+  // Mark the tile whose look matches the current adjustments as active.
+  const activeId = PRESETS.find(
+    (pr) => JSON.stringify(pr.adjust) === JSON.stringify(a),
+  )?.id;
+
   return (
     <>
       <PanelSection title="Filters">
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-3 gap-2">
           {PRESETS.map((pr) => (
-            <button
+            <FilterThumb
               key={pr.id}
-              type="button"
+              source={sample}
+              adjust={pr.adjust}
+              name={pr.name}
+              active={activeId === pr.id}
               onClick={() => onPreset(pr.adjust)}
-              className="rounded-lg border border-[var(--hairline)] bg-[var(--bg)] px-1 py-2 text-[11px] font-medium text-[var(--ink-dim)] transition-colors hover:border-[var(--accent)] hover:text-[var(--ink)]"
-            >
-              {pr.name}
-            </button>
+            />
           ))}
         </div>
       </PanelSection>

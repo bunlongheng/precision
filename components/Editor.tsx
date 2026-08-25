@@ -528,6 +528,8 @@ export default function Editor({
             selected={selected}
             brush={brush}
             brushCanUndo={brushCanUndo}
+            resolve={resolve}
+            imgVersion={imgVersion}
             onAdjust={onAdjust}
             onPreset={onPreset}
             onResetAdjust={onResetAdjust}
