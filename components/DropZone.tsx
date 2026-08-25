@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { UploadIcon } from "./icons";
 
 const FEATURES = [
@@ -12,23 +12,18 @@ const FEATURES = [
 
 export default function DropZone({ onFile }: { onFile: (file: File) => void }) {
   const [over, setOver] = useState(false);
-
-  const pick = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = () => {
-      const f = input.files?.[0];
-      if (f) onFile(f);
-    };
-    input.click();
-  };
+  const inputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="relative z-10 flex flex-1 items-center justify-center p-5 sm:p-10">
-      <button
-        type="button"
-        onClick={pick}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label="Add a photo"
+        onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
+        }}
         onDragOver={(e) => {
           e.preventDefault();
           setOver(true);
@@ -40,7 +35,7 @@ export default function DropZone({ onFile }: { onFile: (file: File) => void }) {
           const f = e.dataTransfer.files?.[0];
           if (f && f.type.startsWith("image/")) onFile(f);
         }}
-        className="rise flex w-full max-w-xl flex-col items-center rounded-3xl border-2 border-dashed px-6 py-14 text-center transition-colors sm:px-14"
+        className="rise flex w-full max-w-xl cursor-pointer flex-col items-center rounded-3xl border-2 border-dashed px-6 py-14 text-center transition-colors focus:outline-none focus-visible:border-[var(--accent)] sm:px-14"
         style={{
           borderColor: over ? "var(--accent)" : "var(--hairline-strong)",
           background: over ? "var(--accent-glow)" : "var(--panel)",
@@ -69,7 +64,18 @@ export default function DropZone({ onFile }: { onFile: (file: File) => void }) {
             </li>
           ))}
         </ul>
-      </button>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onFile(f);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }
