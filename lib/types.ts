@@ -54,36 +54,13 @@ export type ImageLayer = {
 
 export type Layer = TextLayer | ImageLayer;
 
-export type CollageTemplateId =
-  | "single"
-  | "side-by-side"
-  | "stacked"
-  | "grid-2x2"
-  | "triptych"
-  | "big-left"
-  | "film-strip";
-
-export type CollageCell = {
-  // Normalized rect (0..1) inside the document plus the filled image.
-  nx: number;
-  ny: number;
-  nw: number;
-  nh: number;
-  src: string | null;
-  offsetX: number; // pan within the cell, doc px
-  offsetY: number;
-  scale: number; // >= 1, cover zoom
-};
-
 export type EditorDoc = {
   width: number;
   height: number;
-  baseSrc: string | null; // single background photo, null when using a collage
+  baseSrc: string | null; // the background photo
   adjust: Adjust;
   layers: Layer[];
-  collage: CollageTemplateId;
-  cells: CollageCell[];
-  background: string; // canvas backdrop color (used behind collage gaps / transparency)
+  background: string; // canvas backdrop color (behind any transparency)
 };
 
 export const EMPTY_DOC: EditorDoc = {
@@ -92,7 +69,5 @@ export const EMPTY_DOC: EditorDoc = {
   baseSrc: null,
   adjust: { ...DEFAULT_ADJUST },
   layers: [],
-  collage: "single",
-  cells: [],
   background: "#0d0d0f",
 };

@@ -55,14 +55,6 @@ export const SlidersIcon = (p: P) => (
     <circle cx="16" cy="18" r="2" />
   </Svg>
 );
-export const CollageIcon = (p: P) => (
-  <Svg {...p}>
-    <rect x="3" y="3" width="8" height="8" rx="1" />
-    <rect x="13" y="3" width="8" height="8" rx="1" />
-    <rect x="3" y="13" width="8" height="8" rx="1" />
-    <rect x="13" y="13" width="8" height="8" rx="1" />
-  </Svg>
-);
 export const UndoIcon = (p: P) => (
   <Svg {...p}>
     <path d="M9 7L4 12l5 5M4 12h11a5 5 0 010 10h-1" />

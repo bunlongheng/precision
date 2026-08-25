@@ -15,6 +15,7 @@ export type ProjectMeta = {
 export type SavedProject = ProjectMeta & {
   doc: EditorDoc;
   mask: string | null; // color-splash mask as a data URL, or null
+  blurMask?: string | null; // blur-brush mask as a data URL, or null
 };
 
 const DB_NAME = "precision";

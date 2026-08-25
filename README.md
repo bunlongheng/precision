@@ -8,7 +8,7 @@ A fast, lightweight browser photo editor. Drop an image, tone it black and white
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![React](https://img.shields.io/badge/React-19-149eca?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)
-![Tests](https://img.shields.io/badge/tests-28%20unit%20%2B%2010%20e2e-c9f24d)
+![Tests](https://img.shields.io/badge/tests-23%20unit%20%2B%2010%20e2e-c9f24d)
 ![Deploy](https://img.shields.io/badge/Vercel-live-000?logo=vercel)
 
 **Live:** [precision-bheng.vercel.app](https://precision-bheng.vercel.app)
@@ -27,16 +27,16 @@ A fast, lightweight browser photo editor. Drop an image, tone it black and white
 ## Features
 
 - **Color-splash brush** - the photo drops to black and white; paint to bring the original color back only where you brush. Paint and erase modes, adjustable size and softness, Apple Pencil pressure, per-stroke undo.
-- **Tone and filters** - 12 one-tap looks (Noir, Silver, Sepia, Vintage, Warm, Cool, Vivid, Fade, Punch, Dream, ...) plus brightness, contrast, saturation, black and white, sepia, tint, and blur sliders.
+- **Blur brush** - paint to blur an area (hide a face, soften a background) in 3 styles: **soft** (gaussian), **pixelate** (mosaic), and **secure** (scrambled pixels for redaction), with a strength control.
+- **Tone and filters** - 24 one-tap looks (Noir, Silver, Sepia, Vintage, Cinema, Frost, Golden, Moody, Neon, Sunset, ...) plus brightness, contrast, saturation, black and white, sepia, tint, and blur sliders. Each filter shows a live preview of your own photo.
 - **Text** - multi-line captions with font, weight, italic, alignment, size, letter spacing, rotation, opacity, color, and highlight.
-- **Collages** - 7 layouts (side by side, stacked, 2x2, triptych, big-left, film strip) with a per-cell photo fill and a backdrop color.
 - **Image layers** - drop images on top of images, then move, resize, rotate, round the corners, reorder, and duplicate.
-- **Projects** - every project (images and the brush mask) is saved locally in the browser. A gallery lets you resume or delete past work.
+- **Projects** - every project (images and the brush masks) is saved locally in the browser. A gallery lets you resume or delete past work.
 - **Export and share** - download a PNG, or share straight to iMessage / AirDrop through the native share sheet.
-- **Owner-only access** - optional Google sign-in locked to a single email.
+- **Owner-only access** - optional passcode or Google sign-in gate (off by default; the app runs open).
 - **Light and dark**, responsive, and iPad friendly.
 
-![One-tap filters and adjust sliders](docs/screenshots/filters.png)
+![Live filter previews of your own photo](docs/screenshots/filters.png)
 
 ## Architecture
 
@@ -57,11 +57,11 @@ flowchart LR
 
 | Layer | Role |
 |-------|------|
-| `lib/*` | Pure, tested logic: filters, geometry, collage layouts, undo/redo history, color, project store |
-| `components/render.ts` | Deterministic canvas compositor shared by the live stage and export |
+| `lib/*` | Pure, tested logic: filters, geometry, undo/redo history, color, project store |
+| `components/render.ts` | Deterministic canvas compositor (base + color-splash + blur) shared by the live stage and export |
 | `components/*.tsx` | UI: Editor orchestrator, Stage (canvas + pointer/brush), TopBar, Toolbar, RightPanel, DropZone |
-| `hooks/*` | Image cache and theme (`useSyncExternalStore`) |
-| `auth.ts` + `app/api/auth` | Optional owner-only Google sign-in |
+| `hooks/*` | Image cache, theme (`useSyncExternalStore`), and the reusable paint-mask hook |
+| `auth.ts` + `app/api/auth` | Optional owner-only passcode / Google sign-in |
 
 ### How the color-splash brush works
 
@@ -87,7 +87,7 @@ sequenceDiagram
 - **HTML5 Canvas 2D** for all rendering (GPU `ctx.filter`, no heavy image libraries)
 - **Auth.js** (NextAuth v5) for optional Google sign-in
 - **IndexedDB** for local-first project storage
-- **node:test** (28 unit tests) and **Playwright** (10 e2e, desktop + iPad)
+- **node:test** (23 unit tests) and **Playwright** (10 e2e, desktop + iPad)
 - **Vercel** hosting, **GitHub Actions** CI
 
 ## Quick start
@@ -104,17 +104,18 @@ Open [http://localhost:3040](http://localhost:3040). Drop a photo and start edit
 ```bash
 npm run typecheck   # tsc --noEmit
 npm run lint        # eslint
-npm test            # 28 unit tests (node:test)
+npm test            # 23 unit tests (node:test)
 npm run test:e2e    # 10 Playwright specs
 ```
 
 ## Configuration
 
-No environment variables are required - the app runs fully open by default. To lock it to a single Google account, copy `.env.example` to `.env.local` and set:
+No environment variables are required - the app runs fully open by default. To lock it to the owner, copy `.env.example` to `.env.local` and set either a passcode or Google OAuth:
 
 | Env var | Required | Purpose |
 |---------|----------|---------|
-| `AUTH_GOOGLE_ID` | to enable auth | Google OAuth client id |
+| `AUTH_ACCESS_CODE` | passcode gate | A shared secret; the app then shows an unlock screen |
+| `AUTH_GOOGLE_ID` | Google gate | Google OAuth client id |
 | `AUTH_GOOGLE_SECRET` | to enable auth | Google OAuth client secret |
 | `AUTH_SECRET` | when auth is on | Session encryption secret (`openssl rand -base64 32`) |
 | `AUTH_OWNER_EMAIL` | optional | The only email allowed to sign in |
@@ -132,14 +133,15 @@ precision/
     api/auth/[...nextauth]/route.ts
   components/
     AppShell.tsx        # projects gallery + view switch
-    Editor.tsx          # state, history, brush mask, files, export, share
-    Stage.tsx           # canvas + pointer handling + color-splash brush
+    Editor.tsx          # state, history, brush masks, files, export, share
+    Stage.tsx           # canvas + pointer handling + color-splash / blur brush
     render.ts           # canvas compositor (live + export)
-    TopBar / Toolbar / RightPanel / DropZone / SignIn / ui / icons
+    FilterThumb.tsx     # live per-filter preview of your photo
+    TopBar / Toolbar / RightPanel / DropZone / SignIn / HelpModal / Ambient / ui / icons
   lib/
-    types.ts filters.ts geometry.ts collage.ts history.ts color.ts projectStore.ts
+    types.ts filters.ts geometry.ts history.ts color.ts projectStore.ts
   hooks/
-    useImageCache.ts useTheme.ts
+    useImageCache.ts useTheme.ts usePaintMask.ts
   tests/                # 28 node:test unit tests
   e2e/                  # 10 Playwright specs
   auth.ts               # optional owner-only Google sign-in

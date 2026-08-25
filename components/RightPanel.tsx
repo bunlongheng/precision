@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import type { EditorDoc, Adjust, Layer, TextLayer, ImageLayer } from "@/lib/types";
 import { PRESETS } from "@/lib/filters";
-import { COLLAGE_LIST } from "@/lib/collage";
 import { fitCover } from "@/lib/geometry";
 import type { ImageResolver } from "./render";
 import type { BrushState, ToolId } from "./editor-types";
@@ -36,8 +35,6 @@ type Props = {
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onReorder: (id: string, dir: 1 | -1) => void;
-  onCollage: (id: EditorDoc["collage"]) => void;
-  onDocBg: (color: string) => void;
   onSelectLayer: (id: string) => void;
 };
 
@@ -62,7 +59,6 @@ export default function RightPanel(p: Props) {
       {tool === "brush" && (
         <BrushPanel doc={doc} brush={p.brush} onBrush={p.onBrush} canUndo={p.brushCanUndo} onUndo={p.onBrushUndo} onClear={p.onBrushClear} />
       )}
-      {tool === "collage" && <CollagePanel doc={doc} onCollage={p.onCollage} onBg={p.onDocBg} />}
       {showText && <TextPanel layer={selected as TextLayer} onLayer={p.onLayer} onDelete={p.onDelete} onDuplicate={p.onDuplicate} />}
       {showImage && <ImagePanel layer={selected as ImageLayer} onLayer={p.onLayer} onDelete={p.onDelete} onDuplicate={p.onDuplicate} onReorder={p.onReorder} />}
       {!showText && !showImage && (tool === "select" || tool === "text" || tool === "image") && (
@@ -94,7 +90,7 @@ function AdjustPanel({
   // A small, unfiltered source of the user's own photo that every filter tile
   // re-tints. Built once per image so 24 previews stay cheap.
   const sample = useMemo(() => {
-    const src = doc.baseSrc ?? doc.cells.find((c) => c.src)?.src ?? null;
+    const src = doc.baseSrc;
     const img = src ? resolve(src) : null;
     if (!img) return null;
     const W = 200;
@@ -108,7 +104,7 @@ function AdjustPanel({
     ctx.drawImage(img, r.x, r.y, r.w, r.h);
     return c;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.baseSrc, doc.cells, imgVersion, resolve]);
+  }, [doc.baseSrc, imgVersion, resolve]);
 
   // Mark the tile whose look matches the current adjustments as active.
   const activeId = PRESETS.find(
@@ -168,20 +164,62 @@ function BrushPanel({
   onUndo: () => void;
   onClear: () => void;
 }) {
-  const blocked = doc.collage !== "single" || !doc.baseSrc;
+  const blocked = !doc.baseSrc;
+  const isBlur = brush.effect === "blur";
   return (
     <>
-      <PanelSection title="Color splash">
-        <p className="mb-3 text-[12px] leading-relaxed text-[var(--ink-dim)]">
-          The photo goes black and white. Paint to bring the{" "}
-          <span style={{ color: "var(--accent-strong)" }}>original color</span> back only where you brush.
+      <PanelSection title="Brush effect">
+        <Segmented
+          value={brush.effect}
+          onChange={(e) => onBrush({ effect: e })}
+          options={[
+            { value: "color", label: "Color splash" },
+            { value: "blur", label: "Blur" },
+          ]}
+        />
+        <p className="mt-3 text-[12px] leading-relaxed text-[var(--ink-dim)]">
+          {isBlur ? (
+            <>
+              Paint to <span style={{ color: "var(--accent-strong)" }}>blur</span> an area - hide a face or soften the background.
+            </>
+          ) : (
+            <>
+              The photo goes black and white. Paint to bring the{" "}
+              <span style={{ color: "var(--accent-strong)" }}>original color</span> back only where you brush.
+            </>
+          )}
         </p>
         {blocked && (
-          <p className="rounded-lg border border-[var(--hairline)] bg-[var(--bg)] px-3 py-2 text-[11px] text-[var(--ink-faint)]">
-            Drop a single photo (not a collage) to use the color-splash brush.
+          <p className="mt-3 rounded-lg border border-[var(--hairline)] bg-[var(--bg)] px-3 py-2 text-[11px] text-[var(--ink-faint)]">
+            Drop a photo to use the brush.
           </p>
         )}
       </PanelSection>
+
+      {!blocked && isBlur && (
+        <PanelSection title="Blur style">
+          <Segmented
+            value={brush.blurType}
+            onChange={(t) => onBrush({ blurType: t })}
+            options={[
+              { value: "soft", label: "Soft" },
+              { value: "pixelate", label: "Pixels" },
+              { value: "security", label: "Secure" },
+            ]}
+          />
+          <p className="mt-2 text-[11px] text-[var(--ink-faint)]">
+            {brush.blurType === "soft"
+              ? "Smooth gaussian blur."
+              : brush.blurType === "pixelate"
+                ? "Mosaic pixel blocks."
+                : "Scrambled pixels - unrecoverable, for redaction."}
+          </p>
+          <div className="mt-3.5">
+            <Slider label="Strength" value={brush.blurStrength} min={5} max={100} suffix="%" onChange={(v) => onBrush({ blurStrength: v })} />
+          </div>
+        </PanelSection>
+      )}
+
       {!blocked && (
         <PanelSection title="Brush">
           <div className="space-y-3.5">
@@ -189,7 +227,7 @@ function BrushPanel({
               value={brush.mode}
               onChange={(m) => onBrush({ mode: m })}
               options={[
-                { value: "paint", label: "Paint color" },
+                { value: "paint", label: isBlur ? "Paint blur" : "Paint color" },
                 { value: "erase", label: "Erase" },
               ]}
             />
@@ -206,56 +244,6 @@ function BrushPanel({
           </div>
         </PanelSection>
       )}
-    </>
-  );
-}
-
-function CollagePanel({
-  doc,
-  onCollage,
-  onBg,
-}: {
-  doc: EditorDoc;
-  onCollage: (id: EditorDoc["collage"]) => void;
-  onBg: (c: string) => void;
-}) {
-  return (
-    <>
-      <PanelSection title="Layout">
-        <div className="grid grid-cols-3 gap-2">
-          {COLLAGE_LIST.map((t) => {
-            const active = doc.collage === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => onCollage(t.id)}
-                title={t.name}
-                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border p-1 text-[9px] transition-colors"
-                style={{
-                  borderColor: active ? "var(--accent)" : "var(--hairline)",
-                  background: active ? "var(--accent-glow)" : "var(--bg)",
-                  color: active ? "var(--ink)" : "var(--ink-dim)",
-                }}
-              >
-                <span className="mono text-[13px]">{t.count}</span>
-                <span className="leading-tight">{t.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      </PanelSection>
-      <PanelSection title="Backdrop">
-        <div className="flex flex-wrap gap-2">
-          {PALETTE.map((c) => (
-            <Swatch key={c} color={c} active={doc.background === c} onClick={() => onBg(c)} />
-          ))}
-          <label className="grid h-7 w-7 cursor-pointer place-items-center rounded-full border border-dashed border-[var(--hairline-strong)] text-[var(--ink-faint)]">
-            <input type="color" value={doc.background} onChange={(e) => onBg(e.target.value)} className="sr-only" />
-            +
-          </label>
-        </div>
-      </PanelSection>
     </>
   );
 }

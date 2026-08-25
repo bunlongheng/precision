@@ -50,7 +50,14 @@ export default function TopBar({
     "flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink-dim)] transition-colors hover:bg-[var(--elevated)] hover:text-[var(--ink)] disabled:opacity-30 disabled:hover:bg-transparent";
 
   return (
-    <header className="relative z-20 flex items-center justify-between gap-2 border-b border-[var(--hairline)] bg-[var(--panel)] px-3 py-2.5 sm:px-4">
+    <header
+      className="relative z-20 flex items-center justify-between gap-2 border-b border-[var(--hairline)] bg-[var(--panel)] px-3 py-2.5 sm:px-4"
+      style={{
+        paddingTop: "max(0.625rem, env(safe-area-inset-top))",
+        paddingLeft: "max(0.75rem, env(safe-area-inset-left))",
+        paddingRight: "max(0.75rem, env(safe-area-inset-right))",
+      }}
+    >
       <div className="flex min-w-0 items-center gap-2.5">
         <button
           onClick={onBack}

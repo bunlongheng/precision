@@ -1,43 +1,112 @@
 import type { EditorDoc, ImageLayer, TextLayer } from "@/lib/types";
 import { buildFilterCSS, buildBaseBWFilterCSS } from "@/lib/filters";
-import { cellRect } from "@/lib/collage";
-import { fitCover } from "@/lib/geometry";
+import type { BlurType } from "./editor-types";
 
 // Canvas rendering shared by the live stage and the exporter. Not pure (it
 // touches the canvas API) so it lives outside lib/*, but it is deterministic:
-// same doc + same images + same mask => identical pixels, which is exactly why
+// same doc + same images + same masks => identical pixels, which is exactly why
 // export matches what the user sees on screen.
 
 export type ImageResolver = (src: string) => HTMLImageElement | null;
 
-export const COLLAGE_GAP = 14;
+// The two brush masks + their settings, passed together to keep signatures tidy.
+export type RenderMasks = {
+  colorMask: HTMLCanvasElement | null;
+  colorInked: boolean;
+  blurMask: HTMLCanvasElement | null;
+  blurInked: boolean;
+  blurType: BlurType;
+  blurStrength: number;
+};
 
-function drawCover(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
-  x: number,
-  y: number,
+export const NO_MASKS: RenderMasks = {
+  colorMask: null,
+  colorInked: false,
+  blurMask: null,
+  blurInked: false,
+  blurType: "soft",
+  blurStrength: 55,
+};
+
+/** Produce a blurred copy of `src` in the chosen style. */
+function makeBlurred(
+  src: HTMLCanvasElement,
+  type: BlurType,
+  strength: number,
   w: number,
   h: number,
-  offsetX: number,
-  offsetY: number,
-  scale: number,
-) {
-  const base = fitCover(img.naturalWidth, img.naturalHeight, w, h);
-  const dw = base.w * scale;
-  const dh = base.h * scale;
-  const dx = x + base.x - (dw - base.w) / 2 + offsetX;
-  const dy = y + base.y - (dh - base.h) / 2 + offsetY;
-  ctx.drawImage(img, dx, dy, dw, dh);
+): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext("2d");
+  if (!ctx) return out;
+
+  if (type === "soft") {
+    ctx.filter = `blur(${(2 + strength * 0.45).toFixed(1)}px)`;
+    ctx.drawImage(src, 0, 0, w, h);
+    ctx.filter = "none";
+    return out;
+  }
+
+  // pixelate + security both mosaic first: draw tiny, scale up with no smoothing.
+  const block = Math.max(3, Math.round(3 + strength * 0.6));
+  const sw = Math.max(1, Math.round(w / block));
+  const sh = Math.max(1, Math.round(h / block));
+  const small = document.createElement("canvas");
+  small.width = sw;
+  small.height = sh;
+  small.getContext("2d")?.drawImage(src, 0, 0, sw, sh);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(small, 0, 0, sw, sh, 0, 0, w, h);
+
+  if (type === "security") {
+    // Scramble each block with random noise so it cannot be reconstructed.
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    const amp = 40 + strength;
+    for (let i = 0; i < d.length; i += 4) {
+      const n = (Math.random() - 0.5) * amp;
+      d[i] = Math.min(255, Math.max(0, d[i] + n));
+      d[i + 1] = Math.min(255, Math.max(0, d[i + 1] + n));
+      d[i + 2] = Math.min(255, Math.max(0, d[i + 2] + n));
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  return out;
 }
 
-/** Render the photo / collage base plus the color-splash brush composite. */
+/** Reveal a blurred copy of the current canvas only where the blur mask is inked. */
+function applyBlurThroughMask(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  mask: HTMLCanvasElement,
+  type: BlurType,
+  strength: number,
+) {
+  const snap = document.createElement("canvas");
+  snap.width = w;
+  snap.height = h;
+  snap.getContext("2d")?.drawImage(ctx.canvas, 0, 0);
+  const blurred = makeBlurred(snap, type, strength, w, h);
+  const temp = document.createElement("canvas");
+  temp.width = w;
+  temp.height = h;
+  const tctx = temp.getContext("2d");
+  if (!tctx) return;
+  tctx.drawImage(blurred, 0, 0);
+  tctx.globalCompositeOperation = "destination-in";
+  tctx.drawImage(mask, 0, 0, w, h);
+  ctx.drawImage(temp, 0, 0);
+}
+
+/** Render the photo base plus the color-splash and blur brush composites. */
 export function renderBase(
   ctx: CanvasRenderingContext2D,
   doc: EditorDoc,
   resolve: ImageResolver,
-  mask: HTMLCanvasElement | null,
-  maskInked: boolean,
+  masks: RenderMasks = NO_MASKS,
 ) {
   const { width: w, height: h, adjust } = doc;
   ctx.save();
@@ -45,37 +114,15 @@ export function renderBase(
   ctx.fillStyle = doc.background;
   ctx.fillRect(0, 0, w, h);
 
-  if (doc.collage !== "single") {
-    for (const cell of doc.cells) {
-      const r = cellRect(cell, w, h, COLLAGE_GAP);
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(r.x, r.y, r.w, r.h, 6);
-      ctx.clip();
-      const img = cell.src ? resolve(cell.src) : null;
-      if (img) {
-        ctx.filter = buildFilterCSS(adjust);
-        drawCover(ctx, img, r.x, r.y, r.w, r.h, cell.offsetX, cell.offsetY, cell.scale);
-        ctx.filter = "none";
-      } else {
-        ctx.fillStyle = "rgba(255,255,255,0.04)";
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-      }
-      ctx.restore();
-    }
-    ctx.restore();
-    return;
-  }
-
   if (doc.baseSrc) {
     const img = resolve(doc.baseSrc);
     if (img) {
-      if (mask && maskInked) {
+      if (masks.colorMask && masks.colorInked) {
         // Black and white underneath...
         ctx.filter = buildBaseBWFilterCSS(adjust);
         ctx.drawImage(img, 0, 0, w, h);
         ctx.filter = "none";
-        // ...full-color version revealed only where the mask has ink.
+        // ...full-color version revealed only where the color mask has ink.
         const temp = document.createElement("canvas");
         temp.width = w;
         temp.height = h;
@@ -85,13 +132,17 @@ export function renderBase(
           tctx.drawImage(img, 0, 0, w, h);
           tctx.filter = "none";
           tctx.globalCompositeOperation = "destination-in";
-          tctx.drawImage(mask, 0, 0, w, h);
+          tctx.drawImage(masks.colorMask, 0, 0, w, h);
           ctx.drawImage(temp, 0, 0);
         }
       } else {
         ctx.filter = buildFilterCSS(adjust);
         ctx.drawImage(img, 0, 0, w, h);
         ctx.filter = "none";
+      }
+      // Blur brush: reveal a blurred copy of the composited photo where painted.
+      if (masks.blurMask && masks.blurInked) {
+        applyBlurThroughMask(ctx, w, h, masks.blurMask, masks.blurType, masks.blurStrength);
       }
     }
   }
@@ -167,15 +218,14 @@ export function renderLayers(
 export function renderExport(
   doc: EditorDoc,
   resolve: ImageResolver,
-  mask: HTMLCanvasElement | null,
-  maskInked: boolean,
+  masks: RenderMasks = NO_MASKS,
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = doc.width;
   canvas.height = doc.height;
   const ctx = canvas.getContext("2d");
   if (ctx) {
-    renderBase(ctx, doc, resolve, mask, maskInked);
+    renderBase(ctx, doc, resolve, masks);
     renderLayers(ctx, doc, resolve);
   }
   return canvas;

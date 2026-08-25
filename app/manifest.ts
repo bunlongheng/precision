@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Precision - photo editor",
     short_name: "Precision",
     description:
-      "Fast, lightweight photo editor: black & white tone, filters, text, collages, image layers, and the selective-color brush.",
+      "Fast, lightweight photo editor: black & white tone, 24 filters, text, image layers, the color-splash brush, and a blur brush.",
     start_url: "/",
     display: "standalone",
     orientation: "any",

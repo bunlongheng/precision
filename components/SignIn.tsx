@@ -8,7 +8,7 @@ import Ambient from "./Ambient";
 const FEATURES = [
   "Black & white + one-tap filters",
   "Color-splash brush",
-  "Text, collage & image layers",
+  "Blur brush - soft, pixel & secure",
   "Resume projects, share to iMessage",
 ];
 

@@ -19,11 +19,11 @@ import {
   canRedo,
 } from "@/lib/history";
 import { capSize } from "@/lib/geometry";
-import { reshapeCells, makeCells } from "@/lib/collage";
 import { saveProject, type SavedProject } from "@/lib/projectStore";
 import { useTheme } from "@/hooks/useTheme";
 import { useImageCache } from "@/hooks/useImageCache";
-import { renderExport } from "./render";
+import { usePaintMask } from "@/hooks/usePaintMask";
+import { renderExport, type RenderMasks } from "./render";
 import { DEFAULT_BRUSH, type BrushState, type ToolId } from "./editor-types";
 import Stage from "./Stage";
 import Toolbar from "./Toolbar";
@@ -85,56 +85,45 @@ export default function Editor({
   const [showHelp, setShowHelp] = useState(false);
   const projectId = useRef(initial?.id ?? genId());
 
-  // --- Color-splash mask (imperative offscreen canvas) ----------------------
-  const maskRef = useRef<HTMLCanvasElement | null>(null);
-  const [maskInked, setMaskInked] = useState(false);
-  const [maskVersion, setMaskVersion] = useState(0);
-  const brushSnaps = useRef<ImageData[]>([]);
-  const [brushCanUndo, setBrushCanUndo] = useState(false);
+  // --- Brush masks: color-splash + blur (each an imperative offscreen canvas) --
+  const color = usePaintMask();
+  const blur = usePaintMask();
 
   useEffect(() => {
     if (!initial) return;
     const { width, height } = initial.doc;
-    const c = document.createElement("canvas");
-    c.width = width;
-    c.height = height;
-    maskRef.current = c;
-    if (initial.mask) {
-      loadImage(initial.mask).then((img) => {
-        c.getContext("2d")?.drawImage(img, 0, 0);
-        setMaskInked(true);
-        setMaskVersion((v) => v + 1);
-      });
-    }
+    color.fresh(width, height);
+    blur.fresh(width, height);
+    if (initial.mask) color.loadFrom(initial.mask, width, height);
+    if (initial.blurMask) blur.loadFrom(initial.blurMask, width, height);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const freshMask = useCallback((w: number, h: number) => {
-    const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
-    maskRef.current = c;
-    brushSnaps.current = [];
-    setBrushCanUndo(false);
-    setMaskInked(false);
-    setMaskVersion((v) => v + 1);
-  }, []);
+  const freshMasks = useCallback(
+    (w: number, h: number) => {
+      color.fresh(w, h);
+      blur.fresh(w, h);
+    },
+    [color, blur],
+  );
 
-  const maskHasInk = useCallback(() => {
-    const c = maskRef.current;
-    if (!c) return false;
-    const ctx = c.getContext("2d");
-    if (!ctx) return false;
-    const { data } = ctx.getImageData(0, 0, c.width, c.height);
-    for (let i = 3; i < data.length; i += 64) if (data[i] > 4) return true;
-    return false;
-  }, []);
+  // The mask + undo controls for whichever effect the brush is currently on.
+  const active = brush.effect === "blur" ? blur : color;
+
+  // The masks bundle handed to the renderer (both composited every frame).
+  const masks: RenderMasks = {
+    colorMask: color.ref.current,
+    colorInked: color.inked,
+    blurMask: blur.ref.current,
+    blurInked: blur.inked,
+    blurType: brush.blurType,
+    blurStrength: brush.blurStrength,
+  };
 
   // --- Image cache ----------------------------------------------------------
   const srcs = useMemo(() => {
     const s: string[] = [];
     if (doc.baseSrc) s.push(doc.baseSrc);
-    for (const c of doc.cells) if (c.src) s.push(c.src);
     for (const l of doc.layers) if (l.type === "image") s.push(l.src);
     return s;
   }, [doc]);
@@ -265,7 +254,7 @@ export default function Editor({
       const src = await fileToDataURL(file);
       const img = await loadImage(src);
       const { w, h } = capSize(img.naturalWidth, img.naturalHeight, 2048);
-      freshMask(w, h);
+      freshMasks(w, h);
       mutate((d) => ({
         ...EMPTY_DOC,
         background: d.background,
@@ -276,74 +265,19 @@ export default function Editor({
       setSelectedId(null);
       setTool("adjust");
     },
-    [freshMask, mutate],
+    [freshMasks, mutate],
   );
 
-  const onCollage = useCallback(
-    (next: EditorDoc["collage"]) =>
-      mutate((d) => {
-        if (next === "single") {
-          const first = d.cells[0]?.src ?? d.baseSrc;
-          return { ...d, collage: "single", cells: [], baseSrc: first };
-        }
-        const source = d.cells.length ? d.cells : makeCells(next);
-        const cells = reshapeCells(next, source);
-        if (!d.cells.length && d.baseSrc) cells[0].src = d.baseSrc;
-        return { ...d, collage: next, cells, baseSrc: null };
-      }),
-    [mutate],
-  );
-
-  const onCellPick = useCallback(
-    (index: number) =>
-      openFilePicker(async (file) => {
-        const src = await fileToDataURL(file);
-        mutate((d) => ({
-          ...d,
-          cells: d.cells.map((c, i) =>
-            i === index ? { ...c, src, offsetX: 0, offsetY: 0, scale: 1 } : c,
-          ),
-        }));
-      }),
-    [mutate],
-  );
-
-  // --- Brush callbacks ------------------------------------------------------
-  const onBrushBegin = useCallback(() => {
-    const c = maskRef.current;
-    const ctx = c?.getContext("2d");
-    if (c && ctx) {
-      brushSnaps.current.push(ctx.getImageData(0, 0, c.width, c.height));
-      if (brushSnaps.current.length > 24) brushSnaps.current.shift();
-      setBrushCanUndo(true);
-    }
-  }, []);
-  const onBrushPaint = useCallback(() => setMaskVersion((v) => v + 1), []);
-  const onBrushEnd = useCallback(() => setMaskInked(true), []);
-  const onBrushUndo = useCallback(() => {
-    const snap = brushSnaps.current.pop();
-    const c = maskRef.current;
-    const ctx = c?.getContext("2d");
-    if (!c || !ctx) return;
-    if (snap) ctx.putImageData(snap, 0, 0);
-    else ctx.clearRect(0, 0, c.width, c.height);
-    setBrushCanUndo(brushSnaps.current.length > 0);
-    setMaskInked(maskHasInk());
-    setMaskVersion((v) => v + 1);
-  }, [maskHasInk]);
-  const onBrushClear = useCallback(() => {
-    onBrushBegin();
-    const c = maskRef.current;
-    c?.getContext("2d")?.clearRect(0, 0, c.width, c.height);
-    setMaskInked(false);
-    setMaskVersion((v) => v + 1);
-  }, [onBrushBegin]);
+  // --- Brush callbacks (routed to whichever mask the brush effect is on) -----
+  const onBrushBegin = useCallback(() => active.begin(), [active]);
+  const onBrushPaint = useCallback(() => active.paint(), [active]);
+  const onBrushEnd = useCallback(() => active.end(), [active]);
 
   // --- Undo / redo ----------------------------------------------------------
   const doUndo = useCallback(() => {
-    if (tool === "brush" && brushCanUndo) onBrushUndo();
+    if (tool === "brush" && active.canUndo) active.undo();
     else setHist((h) => histUndo(h));
-  }, [tool, brushCanUndo, onBrushUndo]);
+  }, [tool, active]);
   const doRedo = useCallback(() => setHist((h) => histRedo(h)), []);
 
   useEffect(() => {
@@ -364,7 +298,7 @@ export default function Editor({
         onDelete(selectedId);
         return;
       }
-      const map: Record<string, ToolId> = { v: "select", a: "adjust", b: "brush", t: "text", i: "image", c: "collage" };
+      const map: Record<string, ToolId> = { v: "select", a: "adjust", b: "brush", t: "text", i: "image" };
       const t = map[e.key.toLowerCase()];
       if (t) setTool(t);
     };
@@ -383,7 +317,7 @@ export default function Editor({
           const file = it.getAsFile();
           if (file) {
             e.preventDefault();
-            if (!doc.baseSrc && doc.collage === "single") loadBase(file);
+            if (!doc.baseSrc) loadBase(file);
             else addSticker(file);
             break;
           }
@@ -392,7 +326,7 @@ export default function Editor({
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [doc.baseSrc, doc.collage, loadBase, addSticker]);
+  }, [doc.baseSrc, loadBase, addSticker]);
 
   // Selecting the image tool immediately prompts for a file.
   const onTool = useCallback(
@@ -403,13 +337,13 @@ export default function Editor({
     [addSticker],
   );
 
-  // --- Export & share -------------------------------------------------------
-  const buildBlob = useCallback((): Promise<Blob | null> => {
-    const canvas = renderExport(doc, resolve, maskRef.current, maskInked);
+  // --- Export & share (plain handlers; the React compiler memoizes them) -----
+  const buildBlob = (): Promise<Blob | null> => {
+    const canvas = renderExport(doc, resolve, masks);
     return new Promise((res) => canvas.toBlob((b) => res(b), "image/png"));
-  }, [doc, resolve, maskInked]);
+  };
 
-  const onExport = useCallback(async () => {
+  const onExport = async () => {
     setExporting(true);
     const b = await buildBlob();
     if (b) {
@@ -421,9 +355,9 @@ export default function Editor({
       URL.revokeObjectURL(url);
     }
     setExporting(false);
-  }, [buildBlob, name]);
+  };
 
-  const onShare = useCallback(async () => {
+  const onShare = async () => {
     const b = await buildBlob();
     if (!b) return;
     const file = new File([b], `${name || "precision"}.png`, { type: "image/png" });
@@ -437,14 +371,14 @@ export default function Editor({
       }
     }
     onExport();
-  }, [buildBlob, name, onExport]);
+  };
 
   // --- Autosave -------------------------------------------------------------
-  const hasContent = !!doc.baseSrc || doc.collage !== "single";
+  const hasContent = !!doc.baseSrc;
   useEffect(() => {
     if (!hasContent) return;
     const t = setTimeout(async () => {
-      const full = renderExport(doc, resolve, maskRef.current, maskInked);
+      const full = renderExport(doc, resolve, masks);
       // Crisp gallery thumbnail: cap the long edge at 720px (sharp on retina)
       // and use high-quality smoothing so cards read clean, not soft.
       const scale = Math.min(1, 720 / Math.max(full.width, full.height));
@@ -463,23 +397,24 @@ export default function Editor({
         updatedAt: Date.now(),
         thumb: tc.toDataURL("image/jpeg", 0.92),
         doc,
-        mask: maskInked && maskRef.current ? maskRef.current.toDataURL() : null,
+        mask: color.toDataURL(),
+        blurMask: blur.toDataURL(),
       });
       onSaved();
     }, 900);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, maskVersion, maskInked, name]);
+  }, [doc, color.version, color.inked, blur.version, blur.inked, name]);
 
   const selected = doc.layers.find((l) => l.id === selectedId) ?? null;
-  const showDrop = !doc.baseSrc && doc.collage === "single";
+  const showDrop = !doc.baseSrc;
 
   return (
     <div className="relative z-10 flex h-[100dvh] flex-col">
       <TopBar
         theme={theme}
         onToggleTheme={toggle}
-        canUndo={canUndo(hist) || (tool === "brush" && brushCanUndo)}
+        canUndo={canUndo(hist) || (tool === "brush" && active.canUndo)}
         canRedo={canRedo(hist)}
         onUndo={doUndo}
         onRedo={doRedo}
@@ -505,9 +440,10 @@ export default function Editor({
             selectedId={selectedId}
             resolve={resolve}
             imgVersion={imgVersion}
-            maskRef={maskRef}
-            maskInked={maskInked}
-            maskVersion={maskVersion}
+            masks={masks}
+            activeMaskRef={active.ref}
+            colorVersion={color.version}
+            blurVersion={blur.version}
             brush={brush}
             editingId={editingId}
             onSelect={setSelectedId}
@@ -515,7 +451,6 @@ export default function Editor({
             onCreateTextAt={onCreateTextAt}
             onEditText={(id, text) => onLayerChange(id, { text }, true)}
             onEditingChange={setEditingId}
-            onCellPick={onCellPick}
             onBrushBegin={onBrushBegin}
             onBrushPaint={onBrushPaint}
             onBrushEnd={onBrushEnd}
@@ -527,21 +462,19 @@ export default function Editor({
             doc={doc}
             selected={selected}
             brush={brush}
-            brushCanUndo={brushCanUndo}
+            brushCanUndo={active.canUndo}
             resolve={resolve}
             imgVersion={imgVersion}
             onAdjust={onAdjust}
             onPreset={onPreset}
             onResetAdjust={onResetAdjust}
             onBrush={(patch) => setBrush((b) => ({ ...b, ...patch }))}
-            onBrushUndo={onBrushUndo}
-            onBrushClear={onBrushClear}
+            onBrushUndo={active.undo}
+            onBrushClear={active.clear}
             onLayer={onLayerChange}
             onDelete={onDelete}
             onDuplicate={onDuplicate}
             onReorder={onReorder}
-            onCollage={onCollage}
-            onDocBg={(c) => mutate((d) => ({ ...d, background: c }))}
             onSelectLayer={(id) => {
               setSelectedId(id);
               setTool("select");

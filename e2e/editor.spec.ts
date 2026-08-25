@@ -51,8 +51,8 @@ test("dropping a photo opens the editor with the adjust panel", async ({ page })
 test("applying a filter and painting the color-splash brush does not error", async ({ page }) => {
   const { errors } = await openEditorWithPhoto(page);
   await page.getByRole("button", { name: "Noir" }).click();
-  await page.getByRole("button", { name: "Color-splash brush" }).click();
-  await expect(page.getByText("COLOR SPLASH")).toBeVisible();
+  await page.getByRole("button", { name: "Brush (color splash & blur)" }).click();
+  await expect(page.getByText("Brush effect")).toBeVisible();
 
   const box = await page.locator("canvas").first().boundingBox();
   expect(box).not.toBeNull();
@@ -77,9 +77,23 @@ test("adding a text layer surfaces the text styling panel", async ({ page }) => 
   await expect(page.getByRole("button", { name: "Bold" })).toBeVisible();
 });
 
-test("switching to a collage layout shows empty cell drop targets", async ({ page }) => {
-  await openEditorWithPhoto(page);
-  await page.getByRole("button", { name: "Collage" }).click();
-  await page.getByRole("button", { name: "Grid 2x2" }).click();
-  await expect(page.getByText("+ Add photo").first()).toBeVisible();
+test("blur brush exposes the blur styles and strength", async ({ page }) => {
+  const { errors } = await openEditorWithPhoto(page);
+  await page.getByRole("button", { name: "Brush (color splash & blur)" }).click();
+  await page.getByRole("button", { name: "Blur", exact: true }).click();
+  await expect(page.getByText("Blur style")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Secure" })).toBeVisible();
+
+  // paint a blur stroke and confirm no runtime errors
+  const box = await page.locator("canvas").first().boundingBox();
+  if (box) {
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await page.mouse.move(cx - 80, cy);
+    await page.mouse.down();
+    for (let i = 0; i <= 6; i++) await page.mouse.move(cx - 80 + i * 24, cy);
+    await page.mouse.up();
+  }
+  await expect(page.getByRole("button", { name: "Undo stroke" })).toBeEnabled();
+  expect(errors).toEqual([]);
 });

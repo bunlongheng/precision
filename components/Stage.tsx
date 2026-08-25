@@ -11,8 +11,7 @@ import {
 } from "react";
 import type { EditorDoc, ImageLayer, Layer, TextLayer } from "@/lib/types";
 import { fitContain, clamp } from "@/lib/geometry";
-import { cellRect } from "@/lib/collage";
-import { renderBase, ImageResolver, COLLAGE_GAP } from "./render";
+import { renderBase, ImageResolver, type RenderMasks } from "./render";
 import type { BrushState, ToolId } from "./editor-types";
 
 type Props = {
@@ -21,9 +20,10 @@ type Props = {
   selectedId: string | null;
   resolve: ImageResolver;
   imgVersion: number;
-  maskRef: RefObject<HTMLCanvasElement | null>;
-  maskInked: boolean;
-  maskVersion: number;
+  masks: RenderMasks;
+  activeMaskRef: RefObject<HTMLCanvasElement | null>;
+  colorVersion: number;
+  blurVersion: number;
   brush: BrushState;
   editingId: string | null;
   onSelect: (id: string | null) => void;
@@ -31,7 +31,6 @@ type Props = {
   onCreateTextAt: (x: number, y: number) => void;
   onEditText: (id: string, text: string) => void;
   onEditingChange: (id: string | null) => void;
-  onCellPick: (index: number) => void;
   onBrushBegin: () => void;
   onBrushPaint: () => void;
   onBrushEnd: () => void;
@@ -40,7 +39,7 @@ type Props = {
 const PAD = 40;
 
 export default function Stage(props: Props) {
-  const { doc, tool, resolve, imgVersion, maskRef, maskInked, maskVersion } = props;
+  const { doc, tool, resolve, imgVersion, masks, activeMaskRef, colorVersion, blurVersion } = props;
   const wrapRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -69,8 +68,8 @@ export default function Stage(props: Props) {
     canvas.height = doc.height;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    renderBase(ctx, doc, resolve, maskRef.current, maskInked);
-  }, [doc, resolve, imgVersion, maskInked, maskVersion, maskRef]);
+    renderBase(ctx, doc, resolve, masks);
+  }, [doc, resolve, imgVersion, masks, colorVersion, blurVersion]);
 
   const toDoc = useCallback(
     (clientX: number, clientY: number) => {
@@ -89,7 +88,7 @@ export default function Stage(props: Props) {
 
   const paintDab = useCallback(
     (x: number, y: number, pressure: number, penType: boolean) => {
-      const mask = maskRef.current;
+      const mask = activeMaskRef.current;
       if (!mask) return;
       const ctx = mask.getContext("2d");
       if (!ctx) return;
@@ -110,7 +109,7 @@ export default function Stage(props: Props) {
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     },
-    [maskRef, props.brush],
+    [activeMaskRef, props.brush],
   );
 
   const strokeTo = useCallback(
@@ -129,7 +128,7 @@ export default function Stage(props: Props) {
 
   const framePointerDown = (e: RPointerEvent<HTMLDivElement>) => {
     const { x, y } = toDoc(e.clientX, e.clientY);
-    if (tool === "brush" && doc.collage === "single" && doc.baseSrc) {
+    if (tool === "brush" && doc.baseSrc) {
       e.preventDefault();
       (e.target as Element).setPointerCapture?.(e.pointerId);
       painting.current = true;
@@ -169,7 +168,7 @@ export default function Stage(props: Props) {
     }
   };
 
-  const brushActive = tool === "brush" && doc.collage === "single" && !!doc.baseSrc;
+  const brushActive = tool === "brush" && !!doc.baseSrc;
 
   return (
     <div
@@ -199,33 +198,6 @@ export default function Stage(props: Props) {
           className="checker block h-full w-full touch-none select-none"
           style={{ width: fit.w, height: fit.h }}
         />
-
-        {/* Collage cell drop targets */}
-        {doc.collage !== "single" &&
-          doc.cells.map((cell, i) => {
-            const r = cellRect(cell, doc.width, doc.height, COLLAGE_GAP);
-            return (
-              <button
-                key={i}
-                type="button"
-                onClick={() => props.onCellPick(i)}
-                className="absolute flex items-center justify-center rounded-[6px] text-[11px] font-medium transition-colors"
-                style={{
-                  left: r.x * scale,
-                  top: r.y * scale,
-                  width: r.w * scale,
-                  height: r.h * scale,
-                  border: cell.src
-                    ? "1px solid transparent"
-                    : "1px dashed var(--hairline-strong)",
-                  color: "var(--ink-dim)",
-                  background: cell.src ? "transparent" : "rgba(255,255,255,0.02)",
-                }}
-              >
-                {!cell.src && "+ Add photo"}
-              </button>
-            );
-          })}
 
         {/* Overlay layers (text + images), rendered top of the base canvas */}
         {doc.layers.map((layer) => (

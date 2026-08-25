@@ -30,14 +30,14 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: "Precision - fast, lightweight photo editor",
   description:
-    "A fast, lightweight browser photo editor. Drop an image, tone it black and white, apply filters, add text, build collages, layer images, and brush the original color back with the selective-color brush. iPad and Apple Pencil ready.",
+    "A fast, lightweight browser photo editor. Drop an image, tone it black and white, apply 24 filters, add text, layer images, brush the original color back, and blur areas with the blur brush. iPad and Apple Pencil ready.",
   applicationName: "Precision",
   keywords: [
     "photo editor",
     "color splash",
     "selective color",
     "black and white",
-    "collage maker",
+    "blur brush",
     "image filters",
     "browser editor",
   ],
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Precision - fast, lightweight photo editor",
     description:
-      "Drop, tone, filter, text, collage, layer, and brush color back onto black and white. Fast, light, iPad-ready.",
+      "Drop, tone, filter, text, layer, brush color back, and blur areas. Fast, light, iPad-ready.",
     url: SITE,
     siteName: "Precision",
     type: "website",
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Precision - fast, lightweight photo editor",
     description:
-      "Drop, tone, filter, text, collage, layer, and brush color back onto black and white.",
+      "Drop, tone, filter, text, layer, brush color back, and blur areas.",
   },
   appleWebApp: {
     capable: true,

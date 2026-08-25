@@ -84,7 +84,14 @@ export default function AppShell({ user, authEnabled }: { user: User; authEnable
   return (
     <div className="relative min-h-[100dvh]">
       <Ambient />
-      <header className="relative z-10 flex items-center justify-between px-5 py-4 sm:px-8">
+      <header
+        className="relative z-10 flex items-center justify-between px-5 py-4 sm:px-8"
+        style={{
+          paddingTop: "max(1rem, env(safe-area-inset-top))",
+          paddingLeft: "max(1.25rem, env(safe-area-inset-left))",
+          paddingRight: "max(1.25rem, env(safe-area-inset-right))",
+        }}
+      >
         <div className="flex items-center gap-2.5">
           <span className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">

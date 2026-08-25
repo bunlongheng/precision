@@ -1,22 +1,14 @@
 "use client";
 
 import type { ToolId } from "./editor-types";
-import {
-  CursorIcon,
-  SlidersIcon,
-  BrushIcon,
-  TextIcon,
-  ImageIcon,
-  CollageIcon,
-} from "./icons";
+import { CursorIcon, SlidersIcon, BrushIcon, TextIcon, ImageIcon } from "./icons";
 
 const TOOLS: { id: ToolId; label: string; Icon: typeof CursorIcon; key: string }[] = [
   { id: "select", label: "Select & move", Icon: CursorIcon, key: "V" },
   { id: "adjust", label: "Adjust & filters", Icon: SlidersIcon, key: "A" },
-  { id: "brush", label: "Color-splash brush", Icon: BrushIcon, key: "B" },
+  { id: "brush", label: "Brush (color splash & blur)", Icon: BrushIcon, key: "B" },
   { id: "text", label: "Add text", Icon: TextIcon, key: "T" },
   { id: "image", label: "Add image layer", Icon: ImageIcon, key: "I" },
-  { id: "collage", label: "Collage", Icon: CollageIcon, key: "C" },
 ];
 
 export default function Toolbar({
@@ -29,7 +21,10 @@ export default function Toolbar({
   disabled: boolean;
 }) {
   return (
-    <nav className="flex flex-row gap-1 border-t border-[var(--hairline)] bg-[var(--panel)] px-2 py-2 sm:flex-col sm:border-r sm:border-t-0 sm:px-2 sm:py-3">
+    <nav
+      className="flex flex-row gap-1 border-t border-[var(--hairline)] bg-[var(--panel)] px-2 py-2 sm:flex-col sm:border-r sm:border-t-0 sm:px-2 sm:py-3"
+      style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+    >
       {TOOLS.map(({ id, label, Icon, key }) => {
         const active = tool === id;
         return (
