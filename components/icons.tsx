@@ -124,3 +124,9 @@ export const ShareIcon = (p: P) => (
     <path d="M12 3v13M12 3L8 7M12 3l4 4M5 12v7a1 1 0 001 1h12a1 1 0 001-1v-7" />
   </Svg>
 );
+export const HelpIcon = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.5 9a2.5 2.5 0 013.9-2c1.3.9 1.1 2.3.1 3.1-.7.6-1.5 1-1.5 2M12 17h.01" />
+  </Svg>
+);

@@ -30,6 +30,7 @@ import Toolbar from "./Toolbar";
 import TopBar from "./TopBar";
 import RightPanel from "./RightPanel";
 import DropZone from "./DropZone";
+import HelpModal from "./HelpModal";
 
 let counter = 0;
 const genId = () => `${Date.now().toString(36)}-${(counter++).toString(36)}`;
@@ -81,6 +82,7 @@ export default function Editor({
   const [brush, setBrush] = useState<BrushState>(DEFAULT_BRUSH);
   const [exporting, setExporting] = useState(false);
   const [name, setName] = useState(initial?.name ?? "Untitled");
+  const [showHelp, setShowHelp] = useState(false);
   const projectId = useRef(initial?.id ?? genId());
 
   // --- Color-splash mask (imperative offscreen canvas) ----------------------
@@ -370,6 +372,28 @@ export default function Editor({
     return () => window.removeEventListener("keydown", onKey);
   }, [doUndo, doRedo, onDelete, selectedId]);
 
+  // Paste an image (Cmd/Ctrl+V): start a new photo when empty, else drop it in
+  // as an image layer.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const it of Array.from(items)) {
+        if (it.type.startsWith("image/")) {
+          const file = it.getAsFile();
+          if (file) {
+            e.preventDefault();
+            if (!doc.baseSrc && doc.collage === "single") loadBase(file);
+            else addSticker(file);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [doc.baseSrc, doc.collage, loadBase, addSticker]);
+
   // Selecting the image tool immediately prompts for a file.
   const onTool = useCallback(
     (t: ToolId) => {
@@ -456,6 +480,7 @@ export default function Editor({
         onExport={onExport}
         onShare={onShare}
         onBack={onExit}
+        onHelp={() => setShowHelp(true)}
         name={name}
         onName={setName}
         zoom={1}
@@ -515,6 +540,7 @@ export default function Editor({
           />
         )}
       </div>
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

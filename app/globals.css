@@ -154,8 +154,48 @@ input[type="range"]::-moz-range-thumb {
   animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Ambient background: three big soft blobs drift slowly for a living, welcoming
+   backdrop behind the home, sign-in, and empty editor. GPU transforms only. */
+@keyframes drift-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(6vw, 4vh, 0) scale(1.12); }
+}
+@keyframes drift-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+  50% { transform: translate3d(-7vw, -5vh, 0) scale(0.92); }
+}
+@keyframes drift-c {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(0.95); }
+  50% { transform: translate3d(4vw, -6vh, 0) scale(1.1); }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+@keyframes sheen {
+  0% { transform: translateX(-30%) rotate(8deg); opacity: 0; }
+  40% { opacity: 0.5; }
+  100% { transform: translateX(130%) rotate(8deg); opacity: 0; }
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(64px);
+  will-change: transform;
+}
+.twinkle { animation: twinkle 3.2s ease-in-out infinite; }
+.floaty { animation: float-y 5s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .rise {
-    animation: none;
+  .rise,
+  .blob,
+  .twinkle,
+  .floaty {
+    animation: none !important;
   }
 }

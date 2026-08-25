@@ -11,6 +11,7 @@ import {
 } from "@/lib/projectStore";
 import { useTheme } from "@/hooks/useTheme";
 import Editor from "./Editor";
+import Ambient from "./Ambient";
 import { SunIcon, MoonIcon, PlusIcon, TrashIcon } from "./icons";
 
 type User = { name: string; email: string } | null;
@@ -81,8 +82,9 @@ export default function AppShell({ user, authEnabled }: { user: User; authEnable
       .join("") || "P";
 
   return (
-    <div className="relative z-10 min-h-[100dvh]">
-      <header className="flex items-center justify-between px-5 py-4 sm:px-8">
+    <div className="relative min-h-[100dvh]">
+      <Ambient />
+      <header className="relative z-10 flex items-center justify-between px-5 py-4 sm:px-8">
         <div className="flex items-center gap-2.5">
           <span className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -110,7 +112,7 @@ export default function AppShell({ user, authEnabled }: { user: User; authEnable
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-5 pb-16 sm:px-8">
+      <main className="relative z-10 mx-auto max-w-5xl px-5 pb-16 sm:px-8">
         <div className="rise py-10 sm:py-14">
           <p className="mono text-[11px] uppercase tracking-[0.28em] text-[var(--accent-strong)]">Workspace</p>
           <h1 className="display mt-2 text-[34px] font-extrabold leading-[1.05] tracking-tight sm:text-[46px]">

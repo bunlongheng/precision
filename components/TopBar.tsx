@@ -8,6 +8,7 @@ import {
   MoonIcon,
   UploadIcon,
   ShareIcon,
+  HelpIcon,
 } from "./icons";
 
 export default function TopBar({
@@ -21,6 +22,7 @@ export default function TopBar({
   onExport,
   onShare,
   onBack,
+  onHelp,
   name,
   onName,
   zoom,
@@ -37,6 +39,7 @@ export default function TopBar({
   onExport: () => void;
   onShare: () => void;
   onBack: () => void;
+  onHelp: () => void;
   name: string;
   onName: (v: string) => void;
   zoom: number;
@@ -70,9 +73,14 @@ export default function TopBar({
             className="min-w-0 max-w-[42vw] truncate rounded-md bg-transparent px-1.5 py-1 text-[14px] font-semibold text-[var(--ink)] outline-none hover:bg-[var(--elevated)] focus:bg-[var(--elevated)] sm:max-w-[220px]"
           />
         ) : (
-          <span className="display text-[15px] font-extrabold tracking-[0.02em] text-[var(--ink)]">
-            PRECISION
-          </span>
+          <div className="leading-none">
+            <div className="display text-[15px] font-extrabold tracking-[0.06em] text-[var(--ink)]">
+              PRECISION
+            </div>
+            <div className="mono mt-0.5 hidden text-[9px] uppercase tracking-[0.28em] text-[var(--ink-faint)] sm:block">
+              photo editor
+            </div>
+          </div>
         )}
       </div>
 
@@ -94,6 +102,15 @@ export default function TopBar({
             <span className="mx-1 hidden h-5 w-px bg-[var(--hairline)] sm:block" />
           </>
         )}
+        <button
+          onClick={onHelp}
+          title="Help & shortcuts"
+          aria-label="Help and shortcuts"
+          className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium text-[var(--ink-dim)] transition-colors hover:bg-[var(--elevated)] hover:text-[var(--ink)]"
+        >
+          <HelpIcon width={17} height={17} />
+          <span className="hidden sm:inline">Help</span>
+        </button>
         <button className={iconBtn} onClick={onToggleTheme} title="Toggle theme" aria-label="Toggle theme">
           {theme === "dark" ? <SunIcon width={18} height={18} /> : <MoonIcon width={18} height={18} />}
         </button>

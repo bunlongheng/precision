@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import Ambient from "./Ambient";
 
 const FEATURES = [
   "Black & white + one-tap filters",
@@ -14,8 +15,9 @@ export default function SignIn() {
   const [busy, setBusy] = useState(false);
 
   return (
-    <main className="relative z-10 grid min-h-[100dvh] place-items-center p-6">
-      <div className="rise w-full max-w-md rounded-3xl border border-[var(--hairline)] bg-[var(--panel)] p-8 text-center sm:p-10" style={{ boxShadow: "var(--shadow)" }}>
+    <main className="relative grid min-h-[100dvh] place-items-center p-6">
+      <Ambient />
+      <div className="rise relative z-10 w-full max-w-md rounded-3xl border border-[var(--hairline)] bg-[var(--panel)] p-8 text-center sm:p-10" style={{ boxShadow: "var(--shadow)" }}>
         <span
           className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-2xl"
           style={{ background: "var(--accent)", color: "var(--accent-ink)", boxShadow: "0 0 32px var(--accent-glow)" }}
