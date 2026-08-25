@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * Precision - a darkroom-grade instrument.
+ * Dark graphite workspace by default so the image is the hero; a warm
+ * paper light mode; one acid-lime signal color that literally stands
+ * for "color returning" - the soul of the color-splash brush.
+ * ------------------------------------------------------------------ */
+
+:root,
+[data-theme="dark"] {
+  --bg: #0d0d0f;
+  --workspace: #101014;
+  --panel: #16161b;
+  --elevated: #1d1d23;
+  --hairline: rgba(255, 255, 255, 0.09);
+  --hairline-strong: rgba(255, 255, 255, 0.16);
+  --ink: #f4f4f5;
+  --ink-dim: #a2a2ac;
+  --ink-faint: #6c6c76;
+  --accent: #c9f24d;
+  --accent-strong: #d7fb6a;
+  --accent-ink: #14180a;
+  --accent-glow: rgba(201, 242, 77, 0.28);
+  --danger: #ff6a4d;
+  --shadow: 0 18px 50px -22px rgba(0, 0, 0, 0.85);
+  --checker-a: #131317;
+  --checker-b: #191920;
+}
+
+[data-theme="light"] {
+  --bg: #f3f1ea;
+  --workspace: #e9e6dd;
+  --panel: #ffffff;
+  --elevated: #faf9f5;
+  --hairline: rgba(20, 18, 12, 0.12);
+  --hairline-strong: rgba(20, 18, 12, 0.22);
+  --ink: #17161a;
+  --ink-dim: #55535c;
+  --ink-faint: #8b8994;
+  --accent: #a6d61f;
+  --accent-strong: #8fbf0a;
+  --accent-ink: #12160a;
+  --accent-glow: rgba(143, 191, 10, 0.28);
+  --danger: #d84a2c;
+  --shadow: 0 18px 44px -24px rgba(60, 55, 40, 0.5);
+  --checker-a: #dedbd1;
+  --checker-b: #d4d1c6;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Fine grain over the whole app for a printed-photo, non-flat atmosphere. */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0.02em;
+}
+
+.display {
+  font-family: var(--font-display), var(--font-body), sans-serif;
+}
+
+/* Precision checkerboard behind transparent image areas. */
+.checker {
+  background-image:
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--checker-b) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker-b) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--checker-b) 75%);
+  background-size: 22px 22px;
+  background-position: 0 0, 0 11px, 11px -11px, -11px 0;
+  background-color: var(--checker-a);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--hairline-strong);
+  outline: none;
+  touch-action: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--hairline-strong), 0 0 12px var(--accent-glow);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
+}
