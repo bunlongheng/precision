@@ -17,7 +17,7 @@ Next.js 16 (App Router) - React 19 - TypeScript - Tailwind v4 - Canvas 2D - Auth
 
 ```bash
 npm install
-npm run dev        # http://localhost:3031
+npm run dev        # http://localhost:3040
 npm run typecheck
 npm run lint
 npm test
