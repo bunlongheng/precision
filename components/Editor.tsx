@@ -445,16 +445,23 @@ export default function Editor({
     if (!hasContent) return;
     const t = setTimeout(async () => {
       const full = renderExport(doc, resolve, maskRef.current, maskInked);
-      const scale = Math.min(1, 320 / Math.max(full.width, full.height));
+      // Crisp gallery thumbnail: cap the long edge at 720px (sharp on retina)
+      // and use high-quality smoothing so cards read clean, not soft.
+      const scale = Math.min(1, 720 / Math.max(full.width, full.height));
       const tc = document.createElement("canvas");
       tc.width = Math.max(1, Math.round(full.width * scale));
       tc.height = Math.max(1, Math.round(full.height * scale));
-      tc.getContext("2d")?.drawImage(full, 0, 0, tc.width, tc.height);
+      const tctx = tc.getContext("2d");
+      if (tctx) {
+        tctx.imageSmoothingEnabled = true;
+        tctx.imageSmoothingQuality = "high";
+        tctx.drawImage(full, 0, 0, tc.width, tc.height);
+      }
       await saveProject({
         id: projectId.current,
         name: name || "Untitled",
         updatedAt: Date.now(),
-        thumb: tc.toDataURL("image/jpeg", 0.7),
+        thumb: tc.toDataURL("image/jpeg", 0.92),
         doc,
         mask: maskInked && maskRef.current ? maskRef.current.toDataURL() : null,
       });
