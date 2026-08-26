@@ -54,6 +54,36 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/**
+ * Decode a file with its EXIF orientation baked in, cap the long edge, and
+ * re-encode as a clean JPEG. This fixes phone photos that are stored rotated
+ * (portrait pixels + an orientation flag) which otherwise land in a mismatched
+ * canvas - and keeps the stored data small.
+ */
+async function loadNormalized(
+  file: File,
+  maxEdge: number,
+): Promise<{ src: string; w: number; h: number }> {
+  try {
+    const bmp = await createImageBitmap(file, {
+      imageOrientation: "from-image",
+    } as ImageBitmapOptions);
+    const { w, h } = capSize(bmp.width, bmp.height, maxEdge);
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    c.getContext("2d")?.drawImage(bmp, 0, 0, w, h);
+    bmp.close();
+    return { src: c.toDataURL("image/jpeg", 0.92), w, h };
+  } catch {
+    // Fallback: no createImageBitmap - use the raw file (may keep EXIF quirks).
+    const src = await fileToDataURL(file);
+    const img = await loadImage(src);
+    const { w, h } = capSize(img.naturalWidth, img.naturalHeight, maxEdge);
+    return { src, w, h };
+  }
+}
+
 function openFilePicker(onFile: (file: File) => void) {
   const input = document.createElement("input");
   input.type = "file";
@@ -246,12 +276,11 @@ export default function Editor({
 
   const addSticker = useCallback(
     async (file: File) => {
-      const src = await fileToDataURL(file);
-      const img = await loadImage(src);
+      const { src, w: natW, h: natH } = await loadNormalized(file, 1600);
       const id = genId();
       mutate((d) => {
         const w = d.width * 0.42;
-        const h = w * (img.naturalHeight / img.naturalWidth);
+        const h = w * (natH / natW);
         const layer: ImageLayer = {
           id,
           type: "image",
@@ -274,9 +303,7 @@ export default function Editor({
 
   const loadBase = useCallback(
     async (file: File) => {
-      const src = await fileToDataURL(file);
-      const img = await loadImage(src);
-      const { w, h } = capSize(img.naturalWidth, img.naturalHeight, 2048);
+      const { src, w, h } = await loadNormalized(file, 2048);
       freshMasks(w, h);
       mutate((d) => ({
         ...EMPTY_DOC,

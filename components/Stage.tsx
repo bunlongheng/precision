@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { EditorDoc, ImageLayer, Layer, TextLayer } from "@/lib/types";
 import { fitContain, clamp } from "@/lib/geometry";
+import { buildFilterCSS } from "@/lib/filters";
 import { renderBase, ImageResolver, type RenderMasks } from "./render";
 import type { BrushState, ToolId } from "./editor-types";
 
@@ -64,6 +65,7 @@ export default function Stage(props: Props) {
 
   const fit = fitContain(doc.width, doc.height, Math.max(1, box.w), Math.max(1, box.h));
   const scale = fit.w / doc.width;
+  const cssFilter = buildFilterCSS(doc.adjust);
 
   // Recomposite the base canvas whenever anything visual changes.
   useEffect(() => {
@@ -283,28 +285,31 @@ export default function Stage(props: Props) {
         onPointerLeave={() => setCursor(null)}
         onPointerCancel={endStroke}
       >
-        <canvas
-          ref={canvasRef}
-          className="checker block h-full w-full touch-none select-none"
-          style={{ width: fit.w, height: fit.h }}
-        />
-
-        {/* Overlay layers (text + images), rendered top of the base canvas */}
-        {doc.layers.map((layer) => (
-          <LayerView
-            key={layer.id}
-            layer={layer}
-            scale={scale}
-            tool={tool}
-            selected={props.selectedId === layer.id}
-            editing={props.editingId === layer.id}
-            toDoc={toDoc}
-            onSelect={props.onSelect}
-            onChange={props.onLayerChange}
-            onEditText={props.onEditText}
-            onEditingChange={props.onEditingChange}
+        {/* The whole composited canvas (base photo + all layers) is filtered
+            together, so an Instagram-style look also covers image/text layers.
+            CSS filters work on Safari (unlike canvas ctx.filter). */}
+        <div className="absolute inset-0" style={{ filter: cssFilter }}>
+          <canvas
+            ref={canvasRef}
+            className="checker block h-full w-full touch-none select-none"
+            style={{ width: fit.w, height: fit.h }}
           />
-        ))}
+          {doc.layers.map((layer) => (
+            <LayerView
+              key={layer.id}
+              layer={layer}
+              scale={scale}
+              tool={tool}
+              selected={props.selectedId === layer.id}
+              editing={props.editingId === layer.id}
+              toDoc={toDoc}
+              onSelect={props.onSelect}
+              onChange={props.onLayerChange}
+              onEditText={props.onEditText}
+              onEditingChange={props.onEditingChange}
+            />
+          ))}
+        </div>
 
         {/* Brush ring cursor */}
         {brushActive && cursor && (

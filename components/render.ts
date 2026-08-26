@@ -1,6 +1,21 @@
 import type { EditorDoc, ImageLayer, TextLayer, Adjust } from "@/lib/types";
+import { DEFAULT_ADJUST } from "@/lib/types";
 import { buildFilterCSS, applyAdjustPixels, boxBlur } from "@/lib/filters";
 import type { BlurType } from "./editor-types";
+
+const BW_ADJUST: Adjust = { ...DEFAULT_ADJUST, grayscale: 100 };
+const isDefaultAdjust = (a: Adjust) =>
+  a.brightness === 100 && a.contrast === 100 && a.saturate === 100 &&
+  a.grayscale === 0 && a.sepia === 0 && a.hue === 0 && a.blur === 0;
+
+/** Apply the global adjust filter over the whole composited canvas (export). */
+function applyAdjustToCanvas(ctx: CanvasRenderingContext2D, w: number, h: number, a: Adjust) {
+  if (isDefaultAdjust(a)) return;
+  const id = ctx.getImageData(0, 0, w, h);
+  applyAdjustPixels(id.data, a);
+  if (a.blur > 0) boxBlur(id.data, w, h, a.blur);
+  ctx.putImageData(id, 0, 0);
+}
 
 // Safari ignores canvas ctx.filter, so detect it once and fall back to
 // pixel-level filtering there. Cached after the first probe.
@@ -158,14 +173,19 @@ function applyBlurThroughMask(
   ctx.drawImage(temp, 0, 0);
 }
 
-/** Render the photo base plus the color-splash and blur brush composites. */
+/**
+ * Render the photo base plus the color-splash and blur brush composites. The
+ * global adjust filter is NOT applied here - it is a final pass over the whole
+ * composited canvas (so it also covers image/text layers), applied by the CSS
+ * filter on the live stage and by applyAdjustToCanvas() on export.
+ */
 export function renderBase(
   ctx: CanvasRenderingContext2D,
   doc: EditorDoc,
   resolve: ImageResolver,
   masks: RenderMasks = NO_MASKS,
 ) {
-  const { width: w, height: h, adjust } = doc;
+  const { width: w, height: h } = doc;
   ctx.save();
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = doc.background;
@@ -176,20 +196,20 @@ export function renderBase(
     if (img) {
       if (masks.colorMask && masks.colorInked) {
         // Black and white underneath...
-        drawAdjusted(ctx, img, w, h, { ...adjust, grayscale: 100, sepia: 0 });
-        // ...full-color version revealed only where the color mask has ink.
+        drawAdjusted(ctx, img, w, h, BW_ADJUST);
+        // ...original color revealed only where the color mask has ink.
         const temp = document.createElement("canvas");
         temp.width = w;
         temp.height = h;
         const tctx = temp.getContext("2d");
         if (tctx) {
-          drawAdjusted(tctx, img, w, h, { ...adjust, grayscale: 0 });
+          tctx.drawImage(img, 0, 0, w, h);
           tctx.globalCompositeOperation = "destination-in";
           tctx.drawImage(masks.colorMask, 0, 0, w, h);
           ctx.drawImage(temp, 0, 0);
         }
       } else {
-        drawAdjusted(ctx, img, w, h, adjust);
+        ctx.drawImage(img, 0, 0, w, h);
       }
       // Blur brush: reveal a blurred copy of the composited photo where painted.
       if (masks.blurMask && masks.blurInked) {
@@ -278,6 +298,8 @@ export function renderExport(
   if (ctx) {
     renderBase(ctx, doc, resolve, masks);
     renderLayers(ctx, doc, resolve);
+    // Global filter over the whole canvas - base + image + text layers alike.
+    applyAdjustToCanvas(ctx, doc.width, doc.height, doc.adjust);
   }
   return canvas;
 }
