@@ -146,7 +146,7 @@ export default function Stage(props: Props) {
   // Touch swipe uses native listeners with passive:false so preventDefault works
   // and iOS actually delivers the moves (React's touch handlers are passive).
   useEffect(() => {
-    const el = frameRef.current;
+    const el = wrapRef.current; // whole canvas area, so black margins swipe too
     if (!el) return;
     let sx = 0, sy = 0, steps = 0, started = false, active = false;
     const start = (e: TouchEvent) => {
