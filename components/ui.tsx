@@ -92,8 +92,8 @@ export function PanelSection({
   action?: ReactNode;
 }) {
   return (
-    <section className="border-b border-[var(--hairline)] px-4 py-4 last:border-b-0">
-      <div className="mb-3 flex items-center justify-between">
+    <section className="border-b border-[var(--hairline)] px-4 py-3 last:border-b-0 sm:py-4">
+      <div className="mb-2.5 flex items-center justify-between sm:mb-3">
         <h3 className="display text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--ink-dim)]">
           {title}
         </h3>

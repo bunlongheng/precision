@@ -153,15 +153,25 @@ export default function Editor({
     [mutate],
   );
 
-  // Swipe the photo to scrub filters: step to the next/previous preset + flash
-  // its name. Plain function so the React compiler memoizes it.
-  const cyclePreset = (dir: 1 | -1) => {
+  // Drag the photo to scrub filters. Scrubbing applies presets transiently
+  // (no history spam); one undo step is written for the whole gesture on end.
+  const scrubStartIdx = useRef(0);
+  const preScrubDoc = useRef(doc);
+  const onScrubStart = () => {
+    preScrubDoc.current = doc;
     const key = JSON.stringify(doc.adjust);
-    const cur = PRESETS.findIndex((pr) => JSON.stringify(pr.adjust) === key);
-    const next = ((cur < 0 ? 0 : cur) + dir + PRESETS.length) % PRESETS.length;
-    const preset = PRESETS[next];
-    mutate((d) => ({ ...d, adjust: { ...preset.adjust } }));
+    const i = PRESETS.findIndex((pr) => JSON.stringify(pr.adjust) === key);
+    scrubStartIdx.current = i < 0 ? 0 : i;
+  };
+  const onScrub = (steps: number) => {
+    const n = PRESETS.length;
+    const i = (((scrubStartIdx.current + steps) % n) + n) % n;
+    const preset = PRESETS[i];
+    setHist((h) => replace(h, { ...h.present, adjust: { ...preset.adjust } }));
     setFilterToast(preset.name);
+  };
+  const onScrubEnd = () => {
+    setHist((h) => ({ ...h, past: [...h.past, preScrubDoc.current], future: [] }));
   };
 
   const onLayerChange = useCallback(
@@ -474,7 +484,9 @@ export default function Editor({
             onCreateTextAt={onCreateTextAt}
             onEditText={(id, text) => onLayerChange(id, { text }, true)}
             onEditingChange={setEditingId}
-            onCyclePreset={cyclePreset}
+            onScrubStart={onScrubStart}
+            onScrub={onScrub}
+            onScrubEnd={onScrubEnd}
             onBrushBegin={onBrushBegin}
             onBrushPaint={onBrushPaint}
             onBrushEnd={onBrushEnd}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { EditorDoc, Adjust, Layer, TextLayer, ImageLayer } from "@/lib/types";
 import { PRESETS } from "@/lib/filters";
 import { fitCover } from "@/lib/geometry";
@@ -120,31 +120,13 @@ function AdjustPanel({
     (pr) => JSON.stringify(pr.adjust) === JSON.stringify(a),
   )?.id;
 
-  // On phones, show Filters OR Adjust (one at a time) - less clutter while
-  // swiping filters. Desktop shows both stacked.
-  const [tab, setTab] = useState<"filters" | "adjust">("filters");
-  const tabBtn = (id: "filters" | "adjust", label: string) => (
-    <button
-      onClick={() => setTab(id)}
-      className="flex-1 rounded-lg py-1.5 text-[12px] font-semibold transition-colors"
-      style={{
-        background: tab === id ? "var(--accent)" : "transparent",
-        color: tab === id ? "var(--accent-ink)" : "var(--ink-dim)",
-      }}
-    >
-      {label}
-    </button>
-  );
-
   return (
     <>
-      <div className="flex gap-1 border-b border-[var(--hairline)] p-2 sm:hidden">
-        {tabBtn("filters", "Filters")}
-        {tabBtn("adjust", "Adjust")}
-      </div>
-      <div className={tab === "filters" ? "block" : "hidden sm:block"}>
+      {/* Filter grid is desktop-only; on phones you flick the photo to change
+          filters (and the name flashes), so no strip is needed here. */}
+      <div className="hidden sm:block">
         <PanelSection title="Filters">
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0">
+          <div className="grid grid-cols-3 gap-2">
             {PRESETS.map((pr) => (
               <FilterThumb
                 key={pr.id}
@@ -158,26 +140,27 @@ function AdjustPanel({
           </div>
         </PanelSection>
       </div>
-      <div className={tab === "adjust" ? "block" : "hidden sm:block"}>
-        <PanelSection
-          title="Adjust"
-          action={
-            <button onClick={onReset} className="mono text-[10px] uppercase tracking-widest text-[var(--ink-faint)] hover:text-[var(--accent-strong)]">
-              reset
-            </button>
-          }
-        >
-          <div className="space-y-3.5">
+      <PanelSection
+        title="Adjust"
+        action={
+          <button onClick={onReset} className="mono text-[10px] uppercase tracking-widest text-[var(--ink-faint)] hover:text-[var(--accent-strong)]">
+            reset
+          </button>
+        }
+      >
+        <div className="space-y-3.5">
           <Slider label="Brightness" value={a.brightness} min={0} max={200} suffix="%" onChange={set("brightness")} onCommit={commit} />
           <Slider label="Contrast" value={a.contrast} min={0} max={200} suffix="%" onChange={set("contrast")} onCommit={commit} />
           <Slider label="Saturation" value={a.saturate} min={0} max={200} suffix="%" onChange={set("saturate")} onCommit={commit} />
-          <Slider label="Black & white" value={a.grayscale} min={0} max={100} suffix="%" onChange={set("grayscale")} onCommit={commit} />
-          <Slider label="Sepia" value={a.sepia} min={0} max={100} suffix="%" onChange={set("sepia")} onCommit={commit} />
-          <Slider label="Tint" value={a.hue} min={-180} max={180} suffix="deg" onChange={set("hue")} onCommit={commit} />
+          {/* Advanced adjustments live on desktop; phone stays stripped down */}
+          <div className="hidden space-y-3.5 sm:block">
+            <Slider label="Black & white" value={a.grayscale} min={0} max={100} suffix="%" onChange={set("grayscale")} onCommit={commit} />
+            <Slider label="Sepia" value={a.sepia} min={0} max={100} suffix="%" onChange={set("sepia")} onCommit={commit} />
+            <Slider label="Tint" value={a.hue} min={-180} max={180} suffix="deg" onChange={set("hue")} onCommit={commit} />
             <Slider label="Blur" value={a.blur} min={0} max={20} step={0.5} suffix="px" onChange={set("blur")} onCommit={commit} />
           </div>
-        </PanelSection>
-      </div>
+        </div>
+      </PanelSection>
     </>
   );
 }
@@ -210,7 +193,7 @@ function BrushPanel({
             { value: "blur", label: "Blur" },
           ]}
         />
-        <p className="mt-3 text-[12px] leading-relaxed text-[var(--ink-dim)]">
+        <p className="mt-3 hidden text-[12px] leading-relaxed text-[var(--ink-dim)] sm:block">
           {isBlur ? (
             <>
               Paint to <span style={{ color: "var(--accent-strong)" }}>blur</span> an area - hide a face or soften the background.
@@ -240,7 +223,7 @@ function BrushPanel({
               { value: "security", label: "Secure" },
             ]}
           />
-          <p className="mt-2 text-[11px] text-[var(--ink-faint)]">
+          <p className="mt-2 hidden text-[11px] text-[var(--ink-faint)] sm:block">
             {brush.blurType === "soft"
               ? "Smooth gaussian blur."
               : brush.blurType === "pixelate"
@@ -265,7 +248,9 @@ function BrushPanel({
               ]}
             />
             <Slider label="Size" value={brush.size} min={10} max={400} suffix="px" onChange={(v) => onBrush({ size: v })} />
-            <Slider label="Softness" value={Math.round((1 - brush.hardness) * 100)} min={0} max={100} suffix="%" onChange={(v) => onBrush({ hardness: 1 - v / 100 })} />
+            <div className="hidden sm:block">
+              <Slider label="Softness" value={Math.round((1 - brush.hardness) * 100)} min={0} max={100} suffix="%" onChange={(v) => onBrush({ hardness: 1 - v / 100 })} />
+            </div>
             <div className="flex gap-2 pt-1">
               <button onClick={onUndo} disabled={!canUndo} className="flex-1 rounded-lg border border-[var(--hairline)] px-3 py-2 text-[12px] font-medium text-[var(--ink-dim)] transition-colors hover:text-[var(--ink)] disabled:opacity-30">
                 Undo stroke
@@ -320,9 +305,11 @@ function TextPanel({
             { value: "right", label: "R" },
           ]} />
           <Slider label="Size" value={layer.fontSize} min={12} max={400} onChange={(v) => set({ fontSize: v }, false)} onCommit={() => set({})} />
-          <Slider label="Spacing" value={layer.letterSpacing} min={-8} max={40} onChange={(v) => set({ letterSpacing: v }, false)} onCommit={() => set({})} />
-          <Slider label="Rotation" value={layer.rotation} min={-180} max={180} suffix="deg" onChange={(v) => set({ rotation: v }, false)} onCommit={() => set({})} />
-          <Slider label="Opacity" value={Math.round(layer.opacity * 100)} min={0} max={100} suffix="%" onChange={(v) => set({ opacity: v / 100 }, false)} onCommit={() => set({})} />
+          <div className="hidden space-y-3 sm:block">
+            <Slider label="Spacing" value={layer.letterSpacing} min={-8} max={40} onChange={(v) => set({ letterSpacing: v }, false)} onCommit={() => set({})} />
+            <Slider label="Rotation" value={layer.rotation} min={-180} max={180} suffix="deg" onChange={(v) => set({ rotation: v }, false)} onCommit={() => set({})} />
+            <Slider label="Opacity" value={Math.round(layer.opacity * 100)} min={0} max={100} suffix="%" onChange={(v) => set({ opacity: v / 100 }, false)} onCommit={() => set({})} />
+          </div>
         </div>
       </PanelSection>
       <PanelSection title="Color">
@@ -367,15 +354,17 @@ function ImagePanel({
       <PanelSection title="Image layer">
         <div className="space-y-3.5">
           <Slider label="Opacity" value={Math.round(layer.opacity * 100)} min={0} max={100} suffix="%" onChange={(v) => set({ opacity: v / 100 })} onCommit={commit} />
-          <Slider label="Rotation" value={layer.rotation} min={-180} max={180} suffix="deg" onChange={(v) => set({ rotation: v })} onCommit={commit} />
-          <Slider label="Corner radius" value={layer.radius} min={0} max={200} onChange={(v) => set({ radius: v })} onCommit={commit} />
-          <div className="flex gap-2">
-            <button onClick={() => onReorder(layer.id, 1)} className="flex-1 rounded-lg border border-[var(--hairline)] py-2 text-[12px] font-medium text-[var(--ink-dim)] hover:text-[var(--ink)]">
-              Bring forward
-            </button>
-            <button onClick={() => onReorder(layer.id, -1)} className="flex-1 rounded-lg border border-[var(--hairline)] py-2 text-[12px] font-medium text-[var(--ink-dim)] hover:text-[var(--ink)]">
-              Send back
-            </button>
+          <div className="hidden space-y-3.5 sm:block">
+            <Slider label="Rotation" value={layer.rotation} min={-180} max={180} suffix="deg" onChange={(v) => set({ rotation: v })} onCommit={commit} />
+            <Slider label="Corner radius" value={layer.radius} min={0} max={200} onChange={(v) => set({ radius: v })} onCommit={commit} />
+            <div className="flex gap-2">
+              <button onClick={() => onReorder(layer.id, 1)} className="flex-1 rounded-lg border border-[var(--hairline)] py-2 text-[12px] font-medium text-[var(--ink-dim)] hover:text-[var(--ink)]">
+                Bring forward
+              </button>
+              <button onClick={() => onReorder(layer.id, -1)} className="flex-1 rounded-lg border border-[var(--hairline)] py-2 text-[12px] font-medium text-[var(--ink-dim)] hover:text-[var(--ink)]">
+                Send back
+              </button>
+            </div>
           </div>
         </div>
       </PanelSection>

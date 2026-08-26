@@ -31,7 +31,9 @@ type Props = {
   onCreateTextAt: (x: number, y: number) => void;
   onEditText: (id: string, text: string) => void;
   onEditingChange: (id: string | null) => void;
-  onCyclePreset: (dir: 1 | -1) => void;
+  onScrubStart: () => void;
+  onScrub: (steps: number) => void;
+  onScrubEnd: () => void;
   onBrushBegin: () => void;
   onBrushPaint: () => void;
   onBrushEnd: () => void;
@@ -129,8 +131,11 @@ export default function Stage(props: Props) {
     [paintDab, props.brush.size],
   );
 
-  // Swipe across the photo to scrub through filters (Instagram/Snapchat style).
-  const swipe = useRef<{ x: number; y: number } | null>(null);
+  // Drag across the photo to live-scrub through filters (Snapchat/Instagram).
+  // One filter step per ~58px of horizontal drag; the photo + name update as
+  // the finger moves, not just at release.
+  const STEP_PX = 58;
+  const swipe = useRef<{ x: number; y: number; steps: number; started: boolean } | null>(null);
 
   const framePointerDown = (e: RPointerEvent<HTMLDivElement>) => {
     const { x, y } = toDoc(e.clientX, e.clientY);
@@ -148,11 +153,9 @@ export default function Stage(props: Props) {
       props.onCreateTextAt(x, y);
       return;
     }
-    // Empty-space press: start a possible filter-swipe and prime a deselect.
-    // Capture the pointer so the pointerup lands here even if the finger lifts
-    // over the floating panel or past the photo edge (needed on touch).
+    // Empty-space press on the photo: arm a filter-scrub (and a tap-deselect).
     if (e.target === frameRef.current || e.target === canvasRef.current) {
-      swipe.current = { x: e.clientX, y: e.clientY };
+      swipe.current = { x: e.clientX, y: e.clientY, steps: 0, started: false };
       (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     }
   };
@@ -165,25 +168,37 @@ export default function Stage(props: Props) {
         strokeTo(x, y, e.pressure, e.pointerType === "pen");
         props.onBrushPaint();
       }
+      return;
+    }
+    const s = swipe.current;
+    if (!s || !doc.baseSrc) return;
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    if (Math.abs(dx) < 16 || Math.abs(dx) < Math.abs(dy) * 1.1) return; // not a horizontal scrub yet
+    if (!s.started) {
+      s.started = true;
+      props.onScrubStart();
+    }
+    const steps = Math.round(-dx / STEP_PX); // drag left = advance filters
+    if (steps !== s.steps) {
+      s.steps = steps;
+      props.onScrub(steps);
     }
   };
 
-  const endStroke = (e: RPointerEvent<HTMLDivElement>) => {
+  const endStroke = () => {
     if (painting.current) {
       painting.current = false;
       last.current = null;
       props.onBrushEnd();
     }
-    if (swipe.current) {
-      const dx = e.clientX - swipe.current.x;
-      const dy = e.clientY - swipe.current.y;
-      swipe.current = null;
-      if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4 && doc.baseSrc) {
-        props.onCyclePreset(dx < 0 ? 1 : -1); // swipe left = next filter
-      } else if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-        props.onSelect(null); // a tap deselects
-        props.onEditingChange(null);
-      }
+    const s = swipe.current;
+    swipe.current = null;
+    if (!s) return;
+    if (s.started) props.onScrubEnd();
+    else {
+      props.onSelect(null); // a tap deselects
+      props.onEditingChange(null);
     }
   };
 
