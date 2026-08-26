@@ -154,6 +154,9 @@ export default function Stage(props: Props) {
     const start = (e: TouchEvent) => {
       const L = live.current;
       if (L.tool === "brush" || L.tool === "text" || !L.hasBase || e.touches.length !== 1) return;
+      // Only scrub from the open workspace / base photo - never from a touch that
+      // lands on an image or text layer (those drag to move instead).
+      if ((e.target as Element | null)?.closest?.("[data-layer]")) return;
       sx = e.touches[0].clientX;
       sy = e.touches[0].clientY;
       steps = 0;
@@ -302,6 +305,8 @@ export default function Stage(props: Props) {
               tool={tool}
               selected={props.selectedId === layer.id}
               editing={props.editingId === layer.id}
+              docW={doc.width}
+              docH={doc.height}
               toDoc={toDoc}
               onSelect={props.onSelect}
               onChange={props.onLayerChange}
@@ -341,6 +346,8 @@ function LayerView({
   tool,
   selected,
   editing,
+  docW,
+  docH,
   toDoc,
   onSelect,
   onChange,
@@ -352,6 +359,8 @@ function LayerView({
   tool: ToolId;
   selected: boolean;
   editing: boolean;
+  docW: number;
+  docH: number;
   toDoc: (x: number, y: number) => { x: number; y: number };
   onSelect: (id: string | null) => void;
   onChange: (id: string, patch: Partial<Layer>, commit: boolean) => void;
@@ -380,7 +389,13 @@ function LayerView({
     }
     if (!drag.current) return;
     const p = toDoc(e.clientX, e.clientY);
-    onChange(layer.id, { x: p.x - drag.current.ox, y: p.y - drag.current.oy }, false);
+    // Keep the layer within the canvas (its "arrangement cutoff") - at least a
+    // sliver stays on screen so it can't be lost off-edge.
+    const lw = layer.type === "image" ? layer.w : 40;
+    const lh = layer.type === "image" ? layer.h : 40;
+    const nx = clamp(p.x - drag.current.ox, -lw + 24, docW - 24);
+    const ny = clamp(p.y - drag.current.oy, -lh + 24, docH - 24);
+    onChange(layer.id, { x: nx, y: ny }, false);
   };
   const onUp = () => {
     if (drag.current || resize.current) onChange(layer.id, {}, true);
@@ -389,6 +404,7 @@ function LayerView({
   };
 
   const common = {
+    "data-layer": "1", // so the filter-swipe skips touches that land on a layer
     onPointerDown: onDown,
     onPointerMove: onMove,
     onPointerUp: onUp,
