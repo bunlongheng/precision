@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { EditorDoc, Adjust, Layer, TextLayer, ImageLayer } from "@/lib/types";
 import { PRESETS } from "@/lib/filters";
 import { fitCover } from "@/lib/geometry";
@@ -120,40 +120,64 @@ function AdjustPanel({
     (pr) => JSON.stringify(pr.adjust) === JSON.stringify(a),
   )?.id;
 
+  // On phones, show Filters OR Adjust (one at a time) - less clutter while
+  // swiping filters. Desktop shows both stacked.
+  const [tab, setTab] = useState<"filters" | "adjust">("filters");
+  const tabBtn = (id: "filters" | "adjust", label: string) => (
+    <button
+      onClick={() => setTab(id)}
+      className="flex-1 rounded-lg py-1.5 text-[12px] font-semibold transition-colors"
+      style={{
+        background: tab === id ? "var(--accent)" : "transparent",
+        color: tab === id ? "var(--accent-ink)" : "var(--ink-dim)",
+      }}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <>
-      <PanelSection title="Filters">
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0">
-          {PRESETS.map((pr) => (
-            <FilterThumb
-              key={pr.id}
-              source={sample}
-              adjust={pr.adjust}
-              name={pr.name}
-              active={activeId === pr.id}
-              onClick={() => onPreset(pr.adjust)}
-            />
-          ))}
-        </div>
-      </PanelSection>
-      <PanelSection
-        title="Adjust"
-        action={
-          <button onClick={onReset} className="mono text-[10px] uppercase tracking-widest text-[var(--ink-faint)] hover:text-[var(--accent-strong)]">
-            reset
-          </button>
-        }
-      >
-        <div className="space-y-3.5">
+      <div className="flex gap-1 border-b border-[var(--hairline)] p-2 sm:hidden">
+        {tabBtn("filters", "Filters")}
+        {tabBtn("adjust", "Adjust")}
+      </div>
+      <div className={tab === "filters" ? "block" : "hidden sm:block"}>
+        <PanelSection title="Filters">
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0">
+            {PRESETS.map((pr) => (
+              <FilterThumb
+                key={pr.id}
+                source={sample}
+                adjust={pr.adjust}
+                name={pr.name}
+                active={activeId === pr.id}
+                onClick={() => onPreset(pr.adjust)}
+              />
+            ))}
+          </div>
+        </PanelSection>
+      </div>
+      <div className={tab === "adjust" ? "block" : "hidden sm:block"}>
+        <PanelSection
+          title="Adjust"
+          action={
+            <button onClick={onReset} className="mono text-[10px] uppercase tracking-widest text-[var(--ink-faint)] hover:text-[var(--accent-strong)]">
+              reset
+            </button>
+          }
+        >
+          <div className="space-y-3.5">
           <Slider label="Brightness" value={a.brightness} min={0} max={200} suffix="%" onChange={set("brightness")} onCommit={commit} />
           <Slider label="Contrast" value={a.contrast} min={0} max={200} suffix="%" onChange={set("contrast")} onCommit={commit} />
           <Slider label="Saturation" value={a.saturate} min={0} max={200} suffix="%" onChange={set("saturate")} onCommit={commit} />
           <Slider label="Black & white" value={a.grayscale} min={0} max={100} suffix="%" onChange={set("grayscale")} onCommit={commit} />
           <Slider label="Sepia" value={a.sepia} min={0} max={100} suffix="%" onChange={set("sepia")} onCommit={commit} />
           <Slider label="Tint" value={a.hue} min={-180} max={180} suffix="deg" onChange={set("hue")} onCommit={commit} />
-          <Slider label="Blur" value={a.blur} min={0} max={20} step={0.5} suffix="px" onChange={set("blur")} onCommit={commit} />
-        </div>
-      </PanelSection>
+            <Slider label="Blur" value={a.blur} min={0} max={20} step={0.5} suffix="px" onChange={set("blur")} onCommit={commit} />
+          </div>
+        </PanelSection>
+      </div>
     </>
   );
 }

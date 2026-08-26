@@ -149,8 +149,11 @@ export default function Stage(props: Props) {
       return;
     }
     // Empty-space press: start a possible filter-swipe and prime a deselect.
+    // Capture the pointer so the pointerup lands here even if the finger lifts
+    // over the floating panel or past the photo edge (needed on touch).
     if (e.target === frameRef.current || e.target === canvasRef.current) {
       swipe.current = { x: e.clientX, y: e.clientY };
+      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     }
   };
 
