@@ -1,6 +1,55 @@
-import type { EditorDoc, ImageLayer, TextLayer } from "@/lib/types";
-import { buildFilterCSS, buildBaseBWFilterCSS } from "@/lib/filters";
+import type { EditorDoc, ImageLayer, TextLayer, Adjust } from "@/lib/types";
+import { buildFilterCSS, applyAdjustPixels, boxBlur } from "@/lib/filters";
 import type { BlurType } from "./editor-types";
+
+// Safari ignores canvas ctx.filter, so detect it once and fall back to
+// pixel-level filtering there. Cached after the first probe.
+let _ctxFilterOk: boolean | null = null;
+function ctxFilterSupported(): boolean {
+  if (_ctxFilterOk !== null) return _ctxFilterOk;
+  try {
+    const src = document.createElement("canvas");
+    src.width = 2;
+    src.height = 1;
+    const sx = src.getContext("2d")!;
+    sx.fillStyle = "#ff0000";
+    sx.fillRect(0, 0, 2, 1);
+    const out = document.createElement("canvas");
+    out.width = 2;
+    out.height = 1;
+    const ox = out.getContext("2d")!;
+    ox.filter = "grayscale(1)";
+    ox.drawImage(src, 0, 0);
+    ox.filter = "none";
+    const d = ox.getImageData(0, 0, 1, 1).data;
+    _ctxFilterOk = Math.abs(d[0] - d[1]) < 12; // red turned gray => filter works
+  } catch {
+    _ctxFilterOk = false;
+  }
+  return _ctxFilterOk;
+}
+
+/** Draw an image with adjustments applied, cross-browser (ctx.filter or pixels). */
+function drawAdjusted(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  w: number,
+  h: number,
+  adjust: Adjust,
+) {
+  if (ctxFilterSupported()) {
+    ctx.filter = buildFilterCSS(adjust);
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.filter = "none";
+    return;
+  }
+  // Safari fallback: draw plain, then filter the pixels by hand.
+  ctx.drawImage(img, 0, 0, w, h);
+  const id = ctx.getImageData(0, 0, w, h);
+  applyAdjustPixels(id.data, adjust);
+  if (adjust.blur > 0) boxBlur(id.data, w, h, adjust.blur);
+  ctx.putImageData(id, 0, 0);
+}
 
 // Canvas rendering shared by the live stage and the exporter. Not pure (it
 // touches the canvas API) so it lives outside lib/*, but it is deterministic:
@@ -43,9 +92,17 @@ function makeBlurred(
   if (!ctx) return out;
 
   if (type === "soft") {
-    ctx.filter = `blur(${(2 + strength * 0.45).toFixed(1)}px)`;
-    ctx.drawImage(src, 0, 0, w, h);
-    ctx.filter = "none";
+    const px = 2 + strength * 0.45;
+    if (ctxFilterSupported()) {
+      ctx.filter = `blur(${px.toFixed(1)}px)`;
+      ctx.drawImage(src, 0, 0, w, h);
+      ctx.filter = "none";
+    } else {
+      ctx.drawImage(src, 0, 0, w, h);
+      const id = ctx.getImageData(0, 0, w, h);
+      boxBlur(id.data, w, h, px);
+      ctx.putImageData(id, 0, 0);
+    }
     return out;
   }
 
@@ -119,26 +176,20 @@ export function renderBase(
     if (img) {
       if (masks.colorMask && masks.colorInked) {
         // Black and white underneath...
-        ctx.filter = buildBaseBWFilterCSS(adjust);
-        ctx.drawImage(img, 0, 0, w, h);
-        ctx.filter = "none";
+        drawAdjusted(ctx, img, w, h, { ...adjust, grayscale: 100, sepia: 0 });
         // ...full-color version revealed only where the color mask has ink.
         const temp = document.createElement("canvas");
         temp.width = w;
         temp.height = h;
         const tctx = temp.getContext("2d");
         if (tctx) {
-          tctx.filter = buildFilterCSS({ ...adjust, grayscale: 0 });
-          tctx.drawImage(img, 0, 0, w, h);
-          tctx.filter = "none";
+          drawAdjusted(tctx, img, w, h, { ...adjust, grayscale: 0 });
           tctx.globalCompositeOperation = "destination-in";
           tctx.drawImage(masks.colorMask, 0, 0, w, h);
           ctx.drawImage(temp, 0, 0);
         }
       } else {
-        ctx.filter = buildFilterCSS(adjust);
-        ctx.drawImage(img, 0, 0, w, h);
-        ctx.filter = "none";
+        drawAdjusted(ctx, img, w, h, adjust);
       }
       // Blur brush: reveal a blurred copy of the composited photo where painted.
       if (masks.blurMask && masks.blurInked) {

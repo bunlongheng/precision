@@ -5,6 +5,7 @@ import {
   buildBaseBWFilterCSS,
   PRESETS,
   getPreset,
+  applyAdjustPixels,
 } from "../lib/filters.ts";
 import { DEFAULT_ADJUST } from "../lib/types.ts";
 
@@ -42,4 +43,27 @@ test("every preset has a unique id and a valid adjust", () => {
 test("getPreset resolves known and unknown ids", () => {
   assert.equal(getPreset("noir")?.name, "Noir");
   assert.equal(getPreset("nope"), undefined);
+});
+
+test("applyAdjustPixels grayscale makes channels equal (the Safari path)", () => {
+  const d = new Uint8ClampedArray([200, 50, 20, 255]);
+  applyAdjustPixels(d, { ...DEFAULT_ADJUST, grayscale: 100 });
+  assert.equal(d[0], d[1]);
+  assert.equal(d[1], d[2]);
+  assert.ok(d[0] > 50 && d[0] < 130); // luminance of the pixel
+});
+
+test("applyAdjustPixels brightness scales up, default is a no-op", () => {
+  const same = new Uint8ClampedArray([100, 120, 140, 255]);
+  applyAdjustPixels(same, DEFAULT_ADJUST);
+  assert.deepEqual([...same], [100, 120, 140, 255]);
+  const up = new Uint8ClampedArray([100, 100, 100, 255]);
+  applyAdjustPixels(up, { ...DEFAULT_ADJUST, brightness: 150 });
+  assert.equal(up[0], 150);
+});
+
+test("applyAdjustPixels clamps to 0..255", () => {
+  const d = new Uint8ClampedArray([250, 250, 250, 255]);
+  applyAdjustPixels(d, { ...DEFAULT_ADJUST, brightness: 200 });
+  assert.equal(d[0], 255);
 });

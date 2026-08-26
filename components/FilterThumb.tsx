@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { Adjust } from "@/lib/types";
-import { buildFilterCSS } from "@/lib/filters";
+import { applyAdjustPixels, boxBlur } from "@/lib/filters";
 import { fitCover } from "@/lib/geometry";
 
 // A single filter tile: a live thumbnail of the user's own photo with the
@@ -34,9 +34,12 @@ export default function FilterThumb({
     ctx.clearRect(0, 0, W, H);
     if (!source) return;
     const r = fitCover(source.width, source.height, W, H);
-    ctx.filter = buildFilterCSS(adjust);
+    // Pixel-filter the tiny thumb so previews match on Safari (ctx.filter no-op).
     ctx.drawImage(source, r.x, r.y, r.w, r.h);
-    ctx.filter = "none";
+    const id = ctx.getImageData(0, 0, W, H);
+    applyAdjustPixels(id.data, adjust);
+    if (adjust.blur > 0) boxBlur(id.data, W, H, adjust.blur);
+    ctx.putImageData(id, 0, 0);
   }, [source, adjust]);
 
   return (
