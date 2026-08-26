@@ -131,11 +131,64 @@ export default function Stage(props: Props) {
     [paintDab, props.brush.size],
   );
 
-  // Drag across the photo to live-scrub through filters (Snapchat/Instagram).
-  // One filter step per ~58px of horizontal drag; the photo + name update as
-  // the finger moves, not just at release.
-  const STEP_PX = 58;
-  const swipe = useRef<{ x: number; y: number; steps: number; started: boolean } | null>(null);
+  // Drag across the photo to live-scrub filters (Snapchat/Instagram). One filter
+  // per ~54px of horizontal drag; the photo + name update as the finger moves.
+  const STEP_PX = 54;
+  const swipe = useRef<{ x: number; steps: number; started: boolean } | null>(null); // mouse only
+  const press = useRef<{ x: number; y: number } | null>(null); // tap detection
+
+  // Latest values for the native touch listeners (attached once).
+  const live = useRef({ tool, hasBase: !!doc.baseSrc, props });
+  useEffect(() => {
+    live.current = { tool, hasBase: !!doc.baseSrc, props };
+  });
+
+  // Touch swipe uses native listeners with passive:false so preventDefault works
+  // and iOS actually delivers the moves (React's touch handlers are passive).
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el) return;
+    let sx = 0, sy = 0, steps = 0, started = false, active = false;
+    const start = (e: TouchEvent) => {
+      const L = live.current;
+      if (L.tool === "brush" || L.tool === "text" || !L.hasBase || e.touches.length !== 1) return;
+      sx = e.touches[0].clientX;
+      sy = e.touches[0].clientY;
+      steps = 0;
+      started = false;
+      active = true;
+    };
+    const move = (e: TouchEvent) => {
+      if (!active) return;
+      const dx = e.touches[0].clientX - sx;
+      const dy = e.touches[0].clientY - sy;
+      if (Math.abs(dx) < 14 || Math.abs(dx) < Math.abs(dy) * 1.1) return;
+      e.preventDefault();
+      if (!started) {
+        started = true;
+        live.current.props.onScrubStart();
+      }
+      const st = Math.round(-dx / STEP_PX);
+      if (st !== steps) {
+        steps = st;
+        live.current.props.onScrub(st);
+      }
+    };
+    const end = () => {
+      if (active && started) live.current.props.onScrubEnd();
+      active = false;
+    };
+    el.addEventListener("touchstart", start, { passive: true });
+    el.addEventListener("touchmove", move, { passive: false });
+    el.addEventListener("touchend", end, { passive: true });
+    el.addEventListener("touchcancel", end, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", start);
+      el.removeEventListener("touchmove", move);
+      el.removeEventListener("touchend", end);
+      el.removeEventListener("touchcancel", end);
+    };
+  }, []);
 
   const framePointerDown = (e: RPointerEvent<HTMLDivElement>) => {
     const { x, y } = toDoc(e.clientX, e.clientY);
@@ -153,10 +206,12 @@ export default function Stage(props: Props) {
       props.onCreateTextAt(x, y);
       return;
     }
-    // Empty-space press on the photo: arm a filter-scrub (and a tap-deselect).
     if (e.target === frameRef.current || e.target === canvasRef.current) {
-      swipe.current = { x: e.clientX, y: e.clientY, steps: 0, started: false };
-      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+      press.current = { x: e.clientX, y: e.clientY };
+      if (e.pointerType === "mouse") {
+        swipe.current = { x: e.clientX, steps: 0, started: false };
+        (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+      }
     }
   };
 
@@ -170,23 +225,22 @@ export default function Stage(props: Props) {
       }
       return;
     }
-    const s = swipe.current;
+    const s = swipe.current; // mouse scrub only (touch handled natively)
     if (!s || !doc.baseSrc) return;
     const dx = e.clientX - s.x;
-    const dy = e.clientY - s.y;
-    if (Math.abs(dx) < 16 || Math.abs(dx) < Math.abs(dy) * 1.1) return; // not a horizontal scrub yet
+    if (Math.abs(dx) < 14) return;
     if (!s.started) {
       s.started = true;
       props.onScrubStart();
     }
-    const steps = Math.round(-dx / STEP_PX); // drag left = advance filters
+    const steps = Math.round(-dx / STEP_PX);
     if (steps !== s.steps) {
       s.steps = steps;
       props.onScrub(steps);
     }
   };
 
-  const endStroke = () => {
+  const endStroke = (e: RPointerEvent<HTMLDivElement>) => {
     if (painting.current) {
       painting.current = false;
       last.current = null;
@@ -194,9 +248,10 @@ export default function Stage(props: Props) {
     }
     const s = swipe.current;
     swipe.current = null;
-    if (!s) return;
-    if (s.started) props.onScrubEnd();
-    else {
+    if (s?.started) props.onScrubEnd();
+    const pr = press.current;
+    press.current = null;
+    if (pr && !s?.started && Math.abs(e.clientX - pr.x) < 8 && Math.abs(e.clientY - pr.y) < 8) {
       props.onSelect(null); // a tap deselects
       props.onEditingChange(null);
     }
@@ -219,6 +274,7 @@ export default function Stage(props: Props) {
           width: fit.w,
           height: fit.h,
           boxShadow: "var(--shadow)",
+          touchAction: "none",
           cursor: brushActive ? "none" : tool === "text" ? "text" : "default",
         }}
         onPointerDown={framePointerDown}
