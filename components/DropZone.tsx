@@ -74,7 +74,7 @@ export default function DropZone({ onFile }: { onFile: (file: File) => void }) {
           </span>
           <div className="mt-4 text-[16px] font-semibold text-[var(--ink)]">Drop your image here</div>
           <div className="mono mt-1 text-[11px] uppercase tracking-[0.14em] text-[var(--ink-faint)]">
-            JPG, PNG, WebP, GIF up to 50MB
+            JPG, PNG, HEIC, WebP up to 50MB
           </div>
         </div>
 
@@ -109,7 +109,7 @@ export default function DropZone({ onFile }: { onFile: (file: File) => void }) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif"
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];

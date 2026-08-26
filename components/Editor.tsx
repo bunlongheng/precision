@@ -64,10 +64,7 @@ async function loadNormalized(
   file: File,
   maxEdge: number,
 ): Promise<{ src: string; w: number; h: number }> {
-  try {
-    const bmp = await createImageBitmap(file, {
-      imageOrientation: "from-image",
-    } as ImageBitmapOptions);
+  const encode = (bmp: ImageBitmap) => {
     const { w, h } = capSize(bmp.width, bmp.height, maxEdge);
     const c = document.createElement("canvas");
     c.width = w;
@@ -75,8 +72,25 @@ async function loadNormalized(
     c.getContext("2d")?.drawImage(bmp, 0, 0, w, h);
     bmp.close();
     return { src: c.toDataURL("image/jpeg", 0.92), w, h };
+  };
+  const opts = { imageOrientation: "from-image" } as ImageBitmapOptions;
+  const isHeic = /image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+
+  // Native decode: handles JPEG/PNG/WebP everywhere, and HEIC on Safari.
+  try {
+    return encode(await createImageBitmap(file, opts));
   } catch {
-    // Fallback: no createImageBitmap - use the raw file (may keep EXIF quirks).
+    // HEIC on a browser that cannot decode it (Chrome/Firefox/Android): convert.
+    if (isHeic) {
+      try {
+        const heic2any = (await import("heic2any")).default;
+        const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
+        const jpg = Array.isArray(out) ? out[0] : out;
+        return encode(await createImageBitmap(jpg, opts));
+      } catch {
+        /* fall through to the <img> fallback */
+      }
+    }
     const src = await fileToDataURL(file);
     const img = await loadImage(src);
     const { w, h } = capSize(img.naturalWidth, img.naturalHeight, maxEdge);
@@ -87,7 +101,7 @@ async function loadNormalized(
 function openFilePicker(onFile: (file: File) => void) {
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = "image/*";
+  input.accept = "image/*,.heic,.heif";
   input.onchange = () => {
     const f = input.files?.[0];
     if (f) onFile(f);
@@ -534,7 +548,10 @@ export default function Editor({
             onResetAdjust={onResetAdjust}
             onBrush={(patch) => setBrush((b) => ({ ...b, ...patch }))}
             onBrushUndo={active.undo}
-            onBrushClear={active.clear}
+            onBrushClear={() => {
+              color.clear();
+              blur.clear();
+            }}
             onLayer={onLayerChange}
             onDelete={onDelete}
             onDuplicate={onDuplicate}
