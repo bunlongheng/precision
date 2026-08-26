@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Space_Mono } from "next/font/google";
 import "./globals.css";
+import SwRegister from "./sw-register";
 
 // Self-hosted at build time by next/font, so `font-src 'self'` in the CSP holds.
 const display = Bricolage_Grotesque({
@@ -65,6 +66,7 @@ export const metadata: Metadata = {
     icon: "/icon.png",
     apple: "/apple-icon.png",
   },
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = {
@@ -93,6 +95,7 @@ export default function RootLayout({
         className={`${display.variable} ${body.variable} ${mono.variable} grain antialiased`}
       >
         {children}
+        <SwRegister />
       </body>
     </html>
   );
