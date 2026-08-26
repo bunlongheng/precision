@@ -10,7 +10,7 @@ export default function DropZone({ onFile }: { onFile: (file: File) => void }) {
   const pick = () => inputRef.current?.click();
 
   return (
-    <div className="relative flex flex-1 flex-col items-center justify-center overflow-y-auto p-5 sm:p-8">
+    <div className="relative order-1 flex flex-1 flex-col items-center justify-center overflow-y-auto p-5 sm:order-2 sm:p-8">
       <Ambient />
       <div className="rise relative z-10 flex w-full max-w-2xl flex-col items-center text-center">
         {/* Photo-stack illustration */}

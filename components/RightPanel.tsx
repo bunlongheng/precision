@@ -18,6 +18,7 @@ const FONTS = [
 ];
 
 type Props = {
+  open: boolean;
   tool: ToolId;
   doc: EditorDoc;
   selected: Layer | null;
@@ -45,7 +46,16 @@ export default function RightPanel(p: Props) {
   const showImage = (tool === "select" || tool === "image") && selected?.type === "image";
 
   return (
-    <aside className="flex w-full shrink-0 flex-col overflow-y-auto border-t border-[var(--hairline)] bg-[var(--panel)] sm:w-[290px] sm:border-l sm:border-t-0">
+    <aside
+      className={`${
+        p.open ? "flex" : "hidden sm:flex"
+      } order-2 max-h-[46dvh] w-full shrink-0 flex-col overflow-y-auto rounded-t-2xl border-t border-[var(--hairline)] bg-[var(--panel)] shadow-[0_-12px_40px_-20px_rgba(0,0,0,0.6)] sm:order-3 sm:max-h-none sm:w-[290px] sm:rounded-none sm:border-l sm:border-t-0 sm:shadow-none`}
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      {/* grip handle (phone bottom sheet) */}
+      <div className="sticky top-0 z-10 flex justify-center bg-[var(--panel)] py-2 sm:hidden">
+        <span className="h-1 w-9 rounded-full bg-[var(--hairline-strong)]" />
+      </div>
       {tool === "adjust" && (
         <AdjustPanel
           doc={doc}
@@ -114,7 +124,7 @@ function AdjustPanel({
   return (
     <>
       <PanelSection title="Filters">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0">
           {PRESETS.map((pr) => (
             <FilterThumb
               key={pr.id}

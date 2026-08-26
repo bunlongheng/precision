@@ -408,6 +408,9 @@ export default function Editor({
 
   const selected = doc.layers.find((l) => l.id === selectedId) ?? null;
   const showDrop = !doc.baseSrc;
+  // On phones the panel is a bottom sheet - only open it when it has something
+  // to show, so the photo stays full-screen otherwise (Instagram/Facebook style).
+  const panelOpen = tool === "adjust" || tool === "brush" || !!selected;
 
   return (
     <div className="relative z-10 flex h-[100dvh] flex-col">
@@ -429,7 +432,7 @@ export default function Editor({
         hasDoc={hasContent}
         exporting={exporting}
       />
-      <div className="flex min-h-0 flex-1 flex-col-reverse sm:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
         <Toolbar tool={tool} onTool={onTool} disabled={showDrop} />
         {showDrop ? (
           <DropZone onFile={loadBase} />
@@ -458,6 +461,7 @@ export default function Editor({
         )}
         {!showDrop && (
           <RightPanel
+            open={panelOpen}
             tool={tool}
             doc={doc}
             selected={selected}

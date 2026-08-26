@@ -22,8 +22,8 @@ export default function Toolbar({
 }) {
   return (
     <nav
-      className="flex flex-row gap-1 border-t border-[var(--hairline)] bg-[var(--panel)] px-2 py-2 sm:flex-col sm:border-r sm:border-t-0 sm:px-2 sm:py-3"
-      style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+      className="order-3 flex flex-row justify-around gap-1 border-t border-[var(--hairline)] bg-[var(--panel)] px-2 py-1.5 sm:order-1 sm:flex-col sm:justify-start sm:border-r sm:border-t-0 sm:px-2 sm:py-3"
+      style={{ paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))" }}
     >
       {TOOLS.map(({ id, label, Icon, key }) => {
         const active = tool === id;
@@ -36,7 +36,7 @@ export default function Toolbar({
             title={`${label}  (${key})`}
             aria-label={label}
             aria-pressed={active}
-            className="group relative flex h-11 w-full items-center justify-center rounded-xl transition-colors disabled:opacity-30 sm:w-11"
+            className="group relative flex h-11 max-w-[68px] flex-1 items-center justify-center rounded-xl transition-colors disabled:opacity-30 sm:w-11 sm:max-w-none sm:flex-none"
             style={{
               background: active ? "var(--accent)" : "transparent",
               color: active ? "var(--accent-ink)" : "var(--ink-dim)",

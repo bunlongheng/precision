@@ -44,7 +44,7 @@ export default function FilterThumb({
       type="button"
       onClick={onClick}
       title={name}
-      className="group relative overflow-hidden rounded-lg border transition-transform hover:scale-[1.03]"
+      className="group relative w-[100px] shrink-0 overflow-hidden rounded-lg border transition-transform hover:scale-[1.03] sm:w-auto sm:shrink"
       style={{
         borderColor: active ? "var(--accent)" : "var(--hairline)",
         boxShadow: active ? "0 0 0 1px var(--accent), 0 0 12px var(--accent-glow)" : "none",

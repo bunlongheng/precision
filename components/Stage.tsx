@@ -173,7 +173,7 @@ export default function Stage(props: Props) {
   return (
     <div
       ref={wrapRef}
-      className="relative flex-1 overflow-hidden"
+      className="relative order-1 min-h-0 flex-1 overflow-hidden sm:order-2"
       style={{ touchAction: brushActive ? "none" : "auto" }}
     >
       <div
