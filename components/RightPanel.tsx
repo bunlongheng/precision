@@ -49,7 +49,7 @@ export default function RightPanel(p: Props) {
     <aside
       className={`${
         p.open ? "flex" : "hidden sm:flex"
-      } order-2 max-h-[46dvh] w-full shrink-0 flex-col overflow-y-auto rounded-t-2xl border-t border-[var(--hairline)] bg-[var(--panel)] shadow-[0_-12px_40px_-20px_rgba(0,0,0,0.6)] sm:order-3 sm:max-h-none sm:w-[290px] sm:rounded-none sm:border-l sm:border-t-0 sm:shadow-none`}
+      } order-2 max-h-[38dvh] w-full shrink-0 flex-col overflow-y-auto rounded-t-2xl border-t border-[var(--hairline)] bg-[var(--panel)] shadow-[0_-12px_40px_-20px_rgba(0,0,0,0.6)] sm:order-3 sm:max-h-none sm:w-[290px] sm:rounded-none sm:border-l sm:border-t-0 sm:shadow-none`}
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {/* grip handle (phone bottom sheet) */}

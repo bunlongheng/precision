@@ -43,15 +43,17 @@ export default function Stage(props: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [box, setBox] = useState({ w: 0, h: 0, pad: PAD });
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
 
   // Track the workspace size so the document is always centered and contained.
+  // Phones get a tiny pad so the photo fills the space instead of floating small.
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      setBox({ w: el.clientWidth - PAD * 2, h: el.clientHeight - PAD * 2 });
+      const pad = el.clientWidth < 640 ? 10 : PAD;
+      setBox({ w: el.clientWidth - pad * 2, h: el.clientHeight - pad * 2, pad });
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -180,8 +182,8 @@ export default function Stage(props: Props) {
         ref={frameRef}
         className="absolute overflow-hidden rounded-[3px]"
         style={{
-          left: PAD + fit.x,
-          top: PAD + fit.y,
+          left: box.pad + fit.x,
+          top: box.pad + fit.y,
           width: fit.w,
           height: fit.h,
           boxShadow: "var(--shadow)",
