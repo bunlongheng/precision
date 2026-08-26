@@ -31,6 +31,7 @@ type Props = {
   onCreateTextAt: (x: number, y: number) => void;
   onEditText: (id: string, text: string) => void;
   onEditingChange: (id: string | null) => void;
+  onCyclePreset: (dir: 1 | -1) => void;
   onBrushBegin: () => void;
   onBrushPaint: () => void;
   onBrushEnd: () => void;
@@ -128,6 +129,9 @@ export default function Stage(props: Props) {
     [paintDab, props.brush.size],
   );
 
+  // Swipe across the photo to scrub through filters (Instagram/Snapchat style).
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+
   const framePointerDown = (e: RPointerEvent<HTMLDivElement>) => {
     const { x, y } = toDoc(e.clientX, e.clientY);
     if (tool === "brush" && doc.baseSrc) {
@@ -144,10 +148,9 @@ export default function Stage(props: Props) {
       props.onCreateTextAt(x, y);
       return;
     }
-    // Clicking empty space deselects.
+    // Empty-space press: start a possible filter-swipe and prime a deselect.
     if (e.target === frameRef.current || e.target === canvasRef.current) {
-      props.onSelect(null);
-      props.onEditingChange(null);
+      swipe.current = { x: e.clientX, y: e.clientY };
     }
   };
 
@@ -162,11 +165,22 @@ export default function Stage(props: Props) {
     }
   };
 
-  const endStroke = () => {
+  const endStroke = (e: RPointerEvent<HTMLDivElement>) => {
     if (painting.current) {
       painting.current = false;
       last.current = null;
       props.onBrushEnd();
+    }
+    if (swipe.current) {
+      const dx = e.clientX - swipe.current.x;
+      const dy = e.clientY - swipe.current.y;
+      swipe.current = null;
+      if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4 && doc.baseSrc) {
+        props.onCyclePreset(dx < 0 ? 1 : -1); // swipe left = next filter
+      } else if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+        props.onSelect(null); // a tap deselects
+        props.onEditingChange(null);
+      }
     }
   };
 
@@ -176,7 +190,7 @@ export default function Stage(props: Props) {
     <div
       ref={wrapRef}
       className="relative order-1 min-h-0 flex-1 overflow-hidden sm:order-2"
-      style={{ touchAction: brushActive ? "none" : "auto" }}
+      style={{ touchAction: "none" }}
     >
       <div
         ref={frameRef}

@@ -19,6 +19,7 @@ import {
   canRedo,
 } from "@/lib/history";
 import { capSize } from "@/lib/geometry";
+import { PRESETS } from "@/lib/filters";
 import { saveProject, type SavedProject } from "@/lib/projectStore";
 import { useTheme } from "@/hooks/useTheme";
 import { useImageCache } from "@/hooks/useImageCache";
@@ -83,6 +84,7 @@ export default function Editor({
   const [exporting, setExporting] = useState(false);
   const [name, setName] = useState(initial?.name ?? "Untitled");
   const [showHelp, setShowHelp] = useState(false);
+  const [filterToast, setFilterToast] = useState<string | null>(null);
   const projectId = useRef(initial?.id ?? genId());
 
   // --- Brush masks: color-splash + blur (each an imperative offscreen canvas) --
@@ -150,6 +152,17 @@ export default function Editor({
     () => mutate((d) => ({ ...d, adjust: { ...DEFAULT_ADJUST } })),
     [mutate],
   );
+
+  // Swipe the photo to scrub filters: step to the next/previous preset + flash
+  // its name. Plain function so the React compiler memoizes it.
+  const cyclePreset = (dir: 1 | -1) => {
+    const key = JSON.stringify(doc.adjust);
+    const cur = PRESETS.findIndex((pr) => JSON.stringify(pr.adjust) === key);
+    const next = ((cur < 0 ? 0 : cur) + dir + PRESETS.length) % PRESETS.length;
+    const preset = PRESETS[next];
+    mutate((d) => ({ ...d, adjust: { ...preset.adjust } }));
+    setFilterToast(preset.name);
+  };
 
   const onLayerChange = useCallback(
     (id: string, patch: Partial<Layer>, commit: boolean) =>
@@ -328,6 +341,13 @@ export default function Editor({
     return () => window.removeEventListener("paste", onPaste);
   }, [doc.baseSrc, loadBase, addSticker]);
 
+  // Auto-hide the filter-name toast shortly after a swipe.
+  useEffect(() => {
+    if (!filterToast) return;
+    const t = setTimeout(() => setFilterToast(null), 1100);
+    return () => clearTimeout(t);
+  }, [filterToast]);
+
   // Selecting the image tool immediately prompts for a file.
   const onTool = useCallback(
     (t: ToolId) => {
@@ -432,7 +452,7 @@ export default function Editor({
         hasDoc={hasContent}
         exporting={exporting}
       />
-      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+      <div className="relative flex min-h-0 flex-1 flex-col sm:flex-row">
         <Toolbar tool={tool} onTool={onTool} disabled={showDrop} />
         {showDrop ? (
           <DropZone onFile={loadBase} />
@@ -454,6 +474,7 @@ export default function Editor({
             onCreateTextAt={onCreateTextAt}
             onEditText={(id, text) => onLayerChange(id, { text }, true)}
             onEditingChange={setEditingId}
+            onCyclePreset={cyclePreset}
             onBrushBegin={onBrushBegin}
             onBrushPaint={onBrushPaint}
             onBrushEnd={onBrushEnd}
@@ -484,6 +505,16 @@ export default function Editor({
               setTool("select");
             }}
           />
+        )}
+        {filterToast && (
+          <div className="pointer-events-none absolute left-1/2 top-4 z-40 -translate-x-1/2 sm:top-6">
+            <span
+              className="rise mono rounded-full px-4 py-1.5 text-[13px] font-semibold"
+              style={{ background: "var(--accent)", color: "var(--accent-ink)", boxShadow: "0 4px 18px var(--accent-glow)" }}
+            >
+              {filterToast}
+            </span>
+          </div>
         )}
       </div>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}

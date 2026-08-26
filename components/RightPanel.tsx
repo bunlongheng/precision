@@ -49,8 +49,7 @@ export default function RightPanel(p: Props) {
     <aside
       className={`${
         p.open ? "flex" : "hidden sm:flex"
-      } order-2 max-h-[38dvh] w-full shrink-0 flex-col overflow-y-auto rounded-t-2xl border-t border-[var(--hairline)] bg-[var(--panel)] shadow-[0_-12px_40px_-20px_rgba(0,0,0,0.6)] sm:order-3 sm:max-h-none sm:w-[290px] sm:rounded-none sm:border-l sm:border-t-0 sm:shadow-none`}
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      } absolute inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 max-h-[40dvh] w-full flex-col overflow-y-auto rounded-t-2xl border-t border-[var(--hairline)] bg-[var(--panel)] shadow-[0_-14px_44px_-18px_rgba(0,0,0,0.75)] sm:static sm:bottom-auto sm:z-auto sm:order-3 sm:max-h-none sm:w-[290px] sm:rounded-none sm:border-l sm:border-t-0 sm:shadow-none`}
     >
       {/* grip handle (phone bottom sheet) */}
       <div className="sticky top-0 z-10 flex justify-center bg-[var(--panel)] py-2 sm:hidden">
