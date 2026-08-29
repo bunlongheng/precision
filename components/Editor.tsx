@@ -18,7 +18,8 @@ import {
   canUndo,
   canRedo,
 } from "@/lib/history";
-import { capSize } from "@/lib/geometry";
+import { capSize, type Rect } from "@/lib/geometry";
+import { mapPoint, type Quarter } from "@/lib/crop";
 import { PRESETS } from "@/lib/filters";
 import { saveProject, type SavedProject } from "@/lib/projectStore";
 import { useTheme } from "@/hooks/useTheme";
@@ -32,6 +33,7 @@ import TopBar from "./TopBar";
 import RightPanel from "./RightPanel";
 import DropZone from "./DropZone";
 import HelpModal from "./HelpModal";
+import CropOverlay from "./CropOverlay";
 
 let counter = 0;
 const genId = () => `${Date.now().toString(36)}-${(counter++).toString(36)}`;
@@ -98,6 +100,39 @@ async function loadNormalized(
   }
 }
 
+/**
+ * Draw old-doc content (base image or a brush mask) into a new crop.w x crop.h
+ * canvas, applying the same rotate(`q`)+crop transform as lib/crop's mapPoint so
+ * pixels and layer coordinates stay aligned.
+ */
+function bakeTransform(
+  source: CanvasImageSource,
+  W: number,
+  H: number,
+  q: Quarter,
+  crop: Rect,
+): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = Math.max(1, Math.round(crop.w));
+  out.height = Math.max(1, Math.round(crop.h));
+  const ctx = out.getContext("2d");
+  if (ctx) {
+    ctx.translate(-crop.x, -crop.y);
+    if (q === 1) {
+      ctx.translate(H, 0);
+      ctx.rotate(Math.PI / 2);
+    } else if (q === 2) {
+      ctx.translate(W, H);
+      ctx.rotate(Math.PI);
+    } else if (q === 3) {
+      ctx.translate(0, W);
+      ctx.rotate((3 * Math.PI) / 2);
+    }
+    ctx.drawImage(source, 0, 0, W, H);
+  }
+  return out;
+}
+
 function openFilePicker(onFile: (file: File) => void) {
   const input = document.createElement("input");
   input.type = "file";
@@ -128,6 +163,7 @@ export default function Editor({
   const [exporting, setExporting] = useState(false);
   const [name, setName] = useState(initial?.name ?? "Untitled");
   const [showHelp, setShowHelp] = useState(false);
+  const [cropping, setCropping] = useState(false);
   const [filterToast, setFilterToast] = useState<string | null>(null);
   const projectId = useRef(initial?.id ?? genId());
 
@@ -332,6 +368,46 @@ export default function Editor({
     [freshMasks, mutate],
   );
 
+  // Bake a rotate + crop into the base photo. The transform is applied to the
+  // raw base (adjust stays live), to both brush masks (so painting keeps its
+  // alignment), and to every layer's geometry.
+  const applyCropRotate = useCallback(
+    (q: Quarter, crop: Rect) => {
+      const W = doc.width;
+      const H = doc.height;
+      const base = doc.baseSrc ? resolve(doc.baseSrc) : null;
+      if (!base) {
+        setCropping(false);
+        return;
+      }
+      const newW = Math.max(1, Math.round(crop.w));
+      const newH = Math.max(1, Math.round(crop.h));
+      const newBaseSrc = bakeTransform(base, W, H, q, crop).toDataURL("image/jpeg", 0.92);
+
+      // Rotate/crop each inked mask; empty masks just start fresh at the new size.
+      for (const m of [color, blur]) {
+        if (m.inked && m.ref.current) {
+          m.loadFrom(bakeTransform(m.ref.current, W, H, q, crop).toDataURL(), newW, newH);
+        } else {
+          m.fresh(newW, newH);
+        }
+      }
+
+      const layers = doc.layers.map((l) => {
+        if (l.type === "image") {
+          const c = mapPoint(l.x + l.w / 2, l.y + l.h / 2, W, H, q, crop);
+          return { ...l, x: c.x - l.w / 2, y: c.y - l.h / 2, rotation: l.rotation + q * 90 };
+        }
+        const p = mapPoint(l.x, l.y, W, H, q, crop);
+        return { ...l, x: p.x, y: p.y, rotation: l.rotation + q * 90 };
+      });
+
+      mutate((d) => ({ ...d, baseSrc: newBaseSrc, width: newW, height: newH, layers }));
+      setCropping(false);
+    },
+    [doc, resolve, color, blur, mutate],
+  );
+
   // --- Brush callbacks (routed to whichever mask the brush effect is on) -----
   const onBrushBegin = useCallback(() => active.begin(), [active]);
   const onBrushPaint = useCallback(() => active.paint(), [active]);
@@ -362,13 +438,17 @@ export default function Editor({
         onDelete(selectedId);
         return;
       }
+      if (e.key.toLowerCase() === "c" && doc.baseSrc) {
+        setCropping(true);
+        return;
+      }
       const map: Record<string, ToolId> = { v: "select", a: "adjust", b: "brush", t: "text", i: "image" };
       const t = map[e.key.toLowerCase()];
       if (t) setTool(t);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doUndo, doRedo, onDelete, selectedId]);
+  }, [doUndo, doRedo, onDelete, selectedId, doc.baseSrc]);
 
   // Paste an image (Cmd/Ctrl+V): start a new photo when empty, else drop it in
   // as an image layer.
@@ -403,6 +483,7 @@ export default function Editor({
   const onTool = useCallback(
     (t: ToolId) => {
       if (t === "image") openFilePicker(addSticker);
+      else if (t === "crop") setCropping(true);
       else setTool(t);
     },
     [addSticker],
@@ -481,7 +562,9 @@ export default function Editor({
   const showDrop = !doc.baseSrc;
   // On phones the panel is a bottom sheet - only open it when it has something
   // to show, so the photo stays full-screen otherwise (Instagram/Facebook style).
-  const panelOpen = tool === "adjust" || tool === "brush" || !!selected;
+  // Adjust is excluded: on phones you flick the photo to change filters, so the
+  // slider sheet never pops up (desktop still shows the panel via sm:flex).
+  const panelOpen = tool === "brush" || !!selected;
 
   return (
     <div className="relative z-10 flex h-[100dvh] flex-col">
@@ -574,6 +657,15 @@ export default function Editor({
         )}
       </div>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {cropping && doc.baseSrc && (
+        <CropOverlay
+          doc={doc}
+          resolve={resolve}
+          masks={masks}
+          onApply={applyCropRotate}
+          onCancel={() => setCropping(false)}
+        />
+      )}
     </div>
   );
 }

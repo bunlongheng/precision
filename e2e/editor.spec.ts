@@ -97,3 +97,19 @@ test("blur brush exposes the blur styles and strength", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Undo stroke" })).toBeEnabled();
   expect(errors).toEqual([]);
 });
+
+test("rotate & crop bakes a square without errors", async ({ page }) => {
+  const { errors } = await openEditorWithPhoto(page);
+  await page.getByRole("button", { name: "Rotate & crop" }).click();
+  await expect(page.getByText("ROTATE & CROP")).toBeVisible();
+  await page.getByRole("button", { name: "Rotate right" }).click();
+  await page.getByRole("button", { name: "1:1", exact: true }).click();
+  await page.getByRole("button", { name: "Apply crop" }).click();
+
+  // Overlay closes and the editor still shows the canvas; the crop is now square.
+  await expect(page.getByText("ROTATE & CROP")).toHaveCount(0);
+  const box = await page.locator("canvas").first().boundingBox();
+  expect(box).not.toBeNull();
+  if (box) expect(Math.abs(box.width - box.height)).toBeLessThan(4);
+  expect(errors).toEqual([]);
+});

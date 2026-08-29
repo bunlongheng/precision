@@ -1,11 +1,12 @@
 "use client";
 
 import type { ToolId } from "./editor-types";
-import { CursorIcon, SlidersIcon, BrushIcon, TextIcon, ImageIcon } from "./icons";
+import { CursorIcon, SlidersIcon, CropIcon, BrushIcon, TextIcon, ImageIcon } from "./icons";
 
 const TOOLS: { id: ToolId; label: string; Icon: typeof CursorIcon; key: string }[] = [
   { id: "select", label: "Select & move", Icon: CursorIcon, key: "V" },
   { id: "adjust", label: "Adjust & filters", Icon: SlidersIcon, key: "A" },
+  { id: "crop", label: "Rotate & crop", Icon: CropIcon, key: "C" },
   { id: "brush", label: "Brush (color splash & blur)", Icon: BrushIcon, key: "B" },
   { id: "text", label: "Add text", Icon: TextIcon, key: "T" },
   { id: "image", label: "Add image layer", Icon: ImageIcon, key: "I" },

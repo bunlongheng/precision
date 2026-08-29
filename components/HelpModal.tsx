@@ -5,7 +5,8 @@ import { CloseIcon } from "./icons";
 
 const TOOLS: [string, string][] = [
   ["Select & move", "Drag text and image layers; resize from the corner handle."],
-  ["Adjust & filters", "24 one-tap looks plus brightness, contrast, tint, blur and more."],
+  ["Adjust & filters", "24 one-tap looks plus brightness, contrast, tint, blur and more. On phones, flick the photo to flip filters."],
+  ["Rotate & crop", "Turn the photo 90° and crop to any ratio (1:1, 4:5, 16:9...)."],
   ["Color-splash brush", "The photo goes black & white - paint to bring the color back."],
   ["Blur brush", "Paint to blur an area - soft, pixelate, or secure (scrambled)."],
   ["Text", "Tap the canvas to drop a caption, then style it in the panel."],
@@ -16,7 +17,7 @@ const KEYS: [string, string][] = [
   ["Cmd / Ctrl + V", "Paste an image to start or add a layer"],
   ["Cmd / Ctrl + Z", "Undo"],
   ["Cmd / Ctrl + Shift + Z", "Redo"],
-  ["V A B T I", "Jump to a tool"],
+  ["V A C B T I", "Jump to a tool (C = rotate & crop)"],
   ["Delete", "Remove the selected layer"],
 ];
 
