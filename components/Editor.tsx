@@ -164,6 +164,7 @@ export default function Editor({
   const [name, setName] = useState(initial?.name ?? "Untitled");
   const [showHelp, setShowHelp] = useState(false);
   const [cropping, setCropping] = useState(false);
+  const [showSliders, setShowSliders] = useState(false); // manual adjust is opt-in
   const [filterToast, setFilterToast] = useState<string | null>(null);
   const projectId = useRef(initial?.id ?? genId());
 
@@ -192,15 +193,20 @@ export default function Editor({
   // The mask + undo controls for whichever effect the brush is currently on.
   const active = brush.effect === "blur" ? blur : color;
 
-  // The masks bundle handed to the renderer (both composited every frame).
+  // The masks bundle handed to the live stage (both composited every frame).
+  // colorPreview makes the photo go B&W the moment the color-splash brush is
+  // active, so the user sees the effect before painting any color back.
   const masks: RenderMasks = {
     colorMask: color.ref.current,
     colorInked: color.inked,
+    colorPreview: tool === "brush" && brush.effect === "color",
     blurMask: blur.ref.current,
     blurInked: blur.inked,
     blurType: brush.blurType,
     blurStrength: brush.blurStrength,
   };
+  // Export/save must never bake the preview - only what was actually painted.
+  const exportMasks: RenderMasks = { ...masks, colorPreview: false };
 
   // --- Image cache ----------------------------------------------------------
   const srcs = useMemo(() => {
@@ -368,6 +374,14 @@ export default function Editor({
     [freshMasks, mutate],
   );
 
+  // The color-splash and blur brushes are picked from inside the Filters panel
+  // (as looks), not the toolbar - each flips into brush mode with its effect.
+  const onEnterBrush = useCallback((effect: BrushState["effect"]) => {
+    setBrush((b) => ({ ...b, effect, mode: "paint" }));
+    setTool("brush");
+  }, []);
+  const onExitBrush = useCallback(() => setTool("adjust"), []);
+
   // Bake a rotate + crop into the base photo. The transform is applied to the
   // raw base (adjust stays live), to both brush masks (so painting keeps its
   // alignment), and to every layer's geometry.
@@ -442,13 +456,17 @@ export default function Editor({
         setCropping(true);
         return;
       }
-      const map: Record<string, ToolId> = { v: "select", a: "adjust", b: "brush", t: "text", i: "image" };
+      if (e.key.toLowerCase() === "b" && doc.baseSrc) {
+        onEnterBrush("color"); // color-splash brush (blur is picked from Filters)
+        return;
+      }
+      const map: Record<string, ToolId> = { v: "select", a: "adjust", t: "text", i: "image" };
       const t = map[e.key.toLowerCase()];
       if (t) setTool(t);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doUndo, doRedo, onDelete, selectedId, doc.baseSrc]);
+  }, [doUndo, doRedo, onDelete, selectedId, doc.baseSrc, onEnterBrush]);
 
   // Paste an image (Cmd/Ctrl+V): start a new photo when empty, else drop it in
   // as an image layer.
@@ -491,7 +509,7 @@ export default function Editor({
 
   // --- Export & share (plain handlers; the React compiler memoizes them) -----
   const buildBlob = (): Promise<Blob | null> => {
-    const canvas = renderExport(doc, resolve, masks);
+    const canvas = renderExport(doc, resolve, exportMasks);
     return new Promise((res) => canvas.toBlob((b) => res(b), "image/png"));
   };
 
@@ -530,7 +548,7 @@ export default function Editor({
   useEffect(() => {
     if (!hasContent) return;
     const t = setTimeout(async () => {
-      const full = renderExport(doc, resolve, masks);
+      const full = renderExport(doc, resolve, exportMasks);
       // Crisp gallery thumbnail: cap the long edge at 720px (sharp on retina)
       // and use high-quality smoothing so cards read clean, not soft.
       const scale = Math.min(1, 720 / Math.max(full.width, full.height));
@@ -560,11 +578,11 @@ export default function Editor({
 
   const selected = doc.layers.find((l) => l.id === selectedId) ?? null;
   const showDrop = !doc.baseSrc;
-  // On phones the panel is a bottom sheet - only open it when it has something
-  // to show, so the photo stays full-screen otherwise (Instagram/Facebook style).
-  // Adjust is excluded: on phones you flick the photo to change filters, so the
-  // slider sheet never pops up (desktop still shows the panel via sm:flex).
-  const panelOpen = tool === "brush" || !!selected;
+  // On phones the panel is a bottom sheet - open it when the Filters/brush tools
+  // are active or a layer is selected. The filters sheet holds tappable looks
+  // (no sliders - those are opt-in), so it stays light; the photo also flicks to
+  // change filters. Desktop/iPad show the panel permanently via sm:flex.
+  const panelOpen = tool === "adjust" || tool === "brush" || !!selected;
 
   return (
     <div className="relative z-10 flex h-[100dvh] flex-col">
@@ -626,6 +644,10 @@ export default function Editor({
             brushCanUndo={active.canUndo}
             resolve={resolve}
             imgVersion={imgVersion}
+            showSliders={showSliders}
+            onToggleSliders={() => setShowSliders((v) => !v)}
+            onEnterBrush={onEnterBrush}
+            onExitBrush={onExitBrush}
             onAdjust={onAdjust}
             onPreset={onPreset}
             onResetAdjust={onResetAdjust}

@@ -51,8 +51,8 @@ test("dropping a photo opens the editor with the adjust panel", async ({ page })
 test("applying a filter and painting the color-splash brush does not error", async ({ page }) => {
   const { errors } = await openEditorWithPhoto(page);
   await page.getByRole("button", { name: "Noir" }).click();
-  await page.getByRole("button", { name: "Brush (color splash & blur)" }).click();
-  await expect(page.getByText("Brush effect")).toBeVisible();
+  await page.getByRole("button", { name: "Color splash" }).click();
+  await expect(page.getByText("Color splash")).toBeVisible();
 
   const box = await page.locator("canvas").first().boundingBox();
   expect(box).not.toBeNull();
@@ -79,7 +79,6 @@ test("adding a text layer surfaces the text styling panel", async ({ page }) => 
 
 test("blur brush exposes the blur styles and strength", async ({ page }) => {
   const { errors } = await openEditorWithPhoto(page);
-  await page.getByRole("button", { name: "Brush (color splash & blur)" }).click();
   await page.getByRole("button", { name: "Blur", exact: true }).click();
   await expect(page.getByText("Blur style")).toBeVisible();
   await expect(page.getByRole("button", { name: "Secure" })).toBeVisible();

@@ -142,3 +142,13 @@ export const CheckIcon = (p: P) => (
     <path d="M5 12l5 5L20 7" />
   </Svg>
 );
+export const DropletIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 3s6 5.7 6 10a6 6 0 01-12 0c0-4.3 6-10 6-10z" />
+  </Svg>
+);
+export const BackIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M15 6l-6 6 6 6" />
+  </Svg>
+);
