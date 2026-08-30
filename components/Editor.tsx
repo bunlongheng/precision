@@ -578,11 +578,12 @@ export default function Editor({
 
   const selected = doc.layers.find((l) => l.id === selectedId) ?? null;
   const showDrop = !doc.baseSrc;
-  // On phones the panel is a bottom sheet - open it when the Filters/brush tools
-  // are active or a layer is selected. The filters sheet holds tappable looks
-  // (no sliders - those are opt-in), so it stays light; the photo also flicks to
-  // change filters. Desktop/iPad show the panel permanently via sm:flex.
-  const panelOpen = tool === "adjust" || tool === "brush" || !!selected;
+  // On phones the panel is a bottom sheet. The Filters sheet is intentionally
+  // NOT opened here: the phone stays a clean full-screen photo you flick to
+  // scrub filters (the name flashes as you go). The sheet only rises for the
+  // brush (needs controls) or a selected layer. Desktop/iPad show the panel
+  // permanently via sm:flex, so filters stay one tap away there.
+  const panelOpen = tool === "brush" || !!selected;
 
   return (
     <div className="relative z-10 flex h-[100dvh] flex-col">
