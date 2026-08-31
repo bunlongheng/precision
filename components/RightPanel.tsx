@@ -5,9 +5,9 @@ import type { EditorDoc, Adjust, Layer, TextLayer, ImageLayer } from "@/lib/type
 import { PRESETS } from "@/lib/filters";
 import { fitCover } from "@/lib/geometry";
 import type { ImageResolver } from "./render";
-import type { BrushState, ToolId } from "./editor-types";
+import type { BrushEffect, BrushState, ToolId } from "./editor-types";
 import { Slider, Segmented, PanelSection, Swatch } from "./ui";
-import { TrashIcon, LayersIcon } from "./icons";
+import { TrashIcon, LayersIcon, BrushIcon, DropletIcon, BackIcon } from "./icons";
 import FilterThumb from "./FilterThumb";
 
 const PALETTE = ["#ffffff", "#0d0d0f", "#c9f24d", "#ff6a4d", "#4d9dff", "#ffd23f", "#ff4da6"];
@@ -26,6 +26,10 @@ type Props = {
   brushCanUndo: boolean;
   resolve: ImageResolver;
   imgVersion: number;
+  showSliders: boolean;
+  onToggleSliders: () => void;
+  onEnterBrush: (effect: BrushEffect) => void;
+  onExitBrush: () => void;
   onAdjust: (patch: Partial<Adjust>, commit: boolean) => void;
   onPreset: (a: Adjust) => void;
   onResetAdjust: () => void;
@@ -60,13 +64,16 @@ export default function RightPanel(p: Props) {
           doc={doc}
           resolve={p.resolve}
           imgVersion={p.imgVersion}
+          showSliders={p.showSliders}
+          onToggleSliders={p.onToggleSliders}
+          onEnterBrush={p.onEnterBrush}
           onAdjust={p.onAdjust}
           onPreset={p.onPreset}
           onReset={p.onResetAdjust}
         />
       )}
       {tool === "brush" && (
-        <BrushPanel doc={doc} brush={p.brush} onBrush={p.onBrush} canUndo={p.brushCanUndo} onUndo={p.onBrushUndo} onClear={p.onBrushClear} />
+        <BrushPanel doc={doc} brush={p.brush} onBrush={p.onBrush} canUndo={p.brushCanUndo} onUndo={p.onBrushUndo} onClear={p.onBrushClear} onExit={p.onExitBrush} />
       )}
       {showText && <TextPanel layer={selected as TextLayer} onLayer={p.onLayer} onDelete={p.onDelete} onDuplicate={p.onDuplicate} />}
       {showImage && <ImagePanel layer={selected as ImageLayer} onLayer={p.onLayer} onDelete={p.onDelete} onDuplicate={p.onDuplicate} onReorder={p.onReorder} />}
@@ -81,6 +88,9 @@ function AdjustPanel({
   doc,
   resolve,
   imgVersion,
+  showSliders,
+  onToggleSliders,
+  onEnterBrush,
   onAdjust,
   onPreset,
   onReset,
@@ -88,6 +98,9 @@ function AdjustPanel({
   doc: EditorDoc;
   resolve: ImageResolver;
   imgVersion: number;
+  showSliders: boolean;
+  onToggleSliders: () => void;
+  onEnterBrush: (effect: BrushEffect) => void;
   onAdjust: (patch: Partial<Adjust>, commit: boolean) => void;
   onPreset: (a: Adjust) => void;
   onReset: () => void;
@@ -95,6 +108,7 @@ function AdjustPanel({
   const a = doc.adjust;
   const set = (k: keyof Adjust) => (v: number) => onAdjust({ [k]: v }, false);
   const commit = () => onAdjust({}, true);
+  const blocked = !doc.baseSrc;
 
   // A small, unfiltered source of the user's own photo that every filter tile
   // re-tints. Built once per image so 24 previews stay cheap.
@@ -120,46 +134,69 @@ function AdjustPanel({
     (pr) => JSON.stringify(pr.adjust) === JSON.stringify(a),
   )?.id;
 
+  const brushBtn =
+    "flex items-center justify-center gap-2 rounded-xl border border-[var(--hairline)] bg-[var(--bg)] px-3 py-2.5 text-[13px] font-semibold text-[var(--ink-dim)] transition-colors hover:border-[var(--accent)] hover:text-[var(--ink)] disabled:opacity-40";
+
   return (
     <>
-      {/* Filter grid is desktop-only; on phones you flick the photo to change
-          filters (and the name flashes), so no strip is needed here. */}
-      <div className="hidden sm:block">
-        <PanelSection title="Filters">
-          <div className="grid grid-cols-3 gap-2">
-            {PRESETS.map((pr) => (
-              <FilterThumb
-                key={pr.id}
-                source={sample}
-                adjust={pr.adjust}
-                name={pr.name}
-                active={activeId === pr.id}
-                onClick={() => onPreset(pr.adjust)}
-              />
-            ))}
-          </div>
-        </PanelSection>
-      </div>
+      {/* Tap a look to apply it (you can also flick the photo to flip through). */}
+      <PanelSection title="Filters">
+        <div className="grid grid-cols-3 gap-2">
+          {PRESETS.map((pr) => (
+            <FilterThumb
+              key={pr.id}
+              source={sample}
+              adjust={pr.adjust}
+              name={pr.name}
+              active={activeId === pr.id}
+              onClick={() => onPreset(pr.adjust)}
+            />
+          ))}
+        </div>
+      </PanelSection>
+
+      {/* Brushable looks - each flips into its own brush (kept separate). */}
+      <PanelSection title="Brush a look">
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" disabled={blocked} onClick={() => onEnterBrush("color")} className={brushBtn}>
+            <BrushIcon width={17} height={17} /> Color splash
+          </button>
+          <button type="button" disabled={blocked} onClick={() => onEnterBrush("blur")} className={brushBtn}>
+            <DropletIcon width={17} height={17} /> Blur
+          </button>
+        </div>
+        <p className="mt-2.5 text-[11px] leading-relaxed text-[var(--ink-faint)]">
+          Color splash makes the photo black &amp; white - brush the color back. Blur paints a soft, pixel, or secure blur.
+        </p>
+      </PanelSection>
+
+      {/* Manual sliders are opt-in - hidden until you ask for them. */}
       <PanelSection
         title="Adjust"
         action={
-          <button onClick={onReset} className="mono text-[10px] uppercase tracking-widest text-[var(--ink-faint)] hover:text-[var(--accent-strong)]">
-            reset
+          <button onClick={onToggleSliders} className="mono text-[10px] uppercase tracking-widest text-[var(--ink-faint)] hover:text-[var(--accent-strong)]">
+            {showSliders ? "hide" : "show"}
           </button>
         }
       >
-        <div className="space-y-3.5">
-          <Slider label="Brightness" value={a.brightness} min={0} max={200} suffix="%" onChange={set("brightness")} onCommit={commit} />
-          <Slider label="Contrast" value={a.contrast} min={0} max={200} suffix="%" onChange={set("contrast")} onCommit={commit} />
-          <Slider label="Saturation" value={a.saturate} min={0} max={200} suffix="%" onChange={set("saturate")} onCommit={commit} />
-          {/* Advanced adjustments live on desktop; phone stays stripped down */}
-          <div className="hidden space-y-3.5 sm:block">
+        {showSliders ? (
+          <div className="space-y-3.5">
+            <Slider label="Brightness" value={a.brightness} min={0} max={200} suffix="%" onChange={set("brightness")} onCommit={commit} />
+            <Slider label="Contrast" value={a.contrast} min={0} max={200} suffix="%" onChange={set("contrast")} onCommit={commit} />
+            <Slider label="Saturation" value={a.saturate} min={0} max={200} suffix="%" onChange={set("saturate")} onCommit={commit} />
             <Slider label="Black & white" value={a.grayscale} min={0} max={100} suffix="%" onChange={set("grayscale")} onCommit={commit} />
             <Slider label="Sepia" value={a.sepia} min={0} max={100} suffix="%" onChange={set("sepia")} onCommit={commit} />
             <Slider label="Tint" value={a.hue} min={-180} max={180} suffix="deg" onChange={set("hue")} onCommit={commit} />
             <Slider label="Blur" value={a.blur} min={0} max={20} step={0.5} suffix="px" onChange={set("blur")} onCommit={commit} />
+            <button onClick={onReset} className="w-full rounded-lg border border-[var(--hairline)] py-2 text-[12px] font-medium text-[var(--ink-dim)] transition-colors hover:text-[var(--ink)]">
+              Reset adjustments
+            </button>
           </div>
-        </div>
+        ) : (
+          <p className="text-[12px] leading-relaxed text-[var(--ink-faint)]">
+            Fine-tune brightness, contrast, colour and more by hand.
+          </p>
+        )}
       </PanelSection>
     </>
   );
@@ -172,6 +209,7 @@ function BrushPanel({
   canUndo,
   onUndo,
   onClear,
+  onExit,
 }: {
   doc: EditorDoc;
   brush: BrushState;
@@ -179,29 +217,29 @@ function BrushPanel({
   canUndo: boolean;
   onUndo: () => void;
   onClear: () => void;
+  onExit: () => void;
 }) {
   const blocked = !doc.baseSrc;
   const isBlur = brush.effect === "blur";
   return (
     <>
-      <PanelSection title="Brush effect">
-        <Segmented
-          value={brush.effect}
-          onChange={(e) => onBrush({ effect: e })}
-          options={[
-            { value: "color", label: "Color splash" },
-            { value: "blur", label: "Blur" },
-          ]}
-        />
-        <p className="mt-3 hidden text-[12px] leading-relaxed text-[var(--ink-dim)] sm:block">
+      <PanelSection
+        title={isBlur ? "Blur brush" : "Color splash"}
+        action={
+          <button onClick={onExit} className="flex items-center gap-1 text-[12px] font-semibold text-[var(--accent-strong)] hover:opacity-80">
+            <BackIcon width={15} height={15} /> Done
+          </button>
+        }
+      >
+        <p className="text-[12px] leading-relaxed text-[var(--ink-dim)]">
           {isBlur ? (
             <>
               Paint to <span style={{ color: "var(--accent-strong)" }}>blur</span> an area - hide a face or soften the background.
             </>
           ) : (
             <>
-              The photo goes black and white. Paint to bring the{" "}
-              <span style={{ color: "var(--accent-strong)" }}>original color</span> back only where you brush.
+              The photo is black &amp; white. Paint to bring the{" "}
+              <span style={{ color: "var(--accent-strong)" }}>original color</span> back where you brush; erase to put it back.
             </>
           )}
         </p>
@@ -223,7 +261,7 @@ function BrushPanel({
               { value: "security", label: "Secure" },
             ]}
           />
-          <p className="mt-2 hidden text-[11px] text-[var(--ink-faint)] sm:block">
+          <p className="mt-2 text-[11px] text-[var(--ink-faint)]">
             {brush.blurType === "soft"
               ? "Smooth gaussian blur."
               : brush.blurType === "pixelate"
@@ -243,11 +281,11 @@ function BrushPanel({
               value={brush.mode}
               onChange={(m) => onBrush({ mode: m })}
               options={[
-                { value: "paint", label: isBlur ? "Paint blur" : "Paint color" },
-                { value: "erase", label: "Erase" },
+                { value: "paint", label: isBlur ? "Blur" : "Color" },
+                { value: "erase", label: isBlur ? "Erase" : "B&W" },
               ]}
             />
-            <Slider label="Size" value={brush.size} min={10} max={400} suffix="px" onChange={(v) => onBrush({ size: v })} />
+            <Slider label="Brush size" value={brush.size} min={10} max={400} suffix="px" onChange={(v) => onBrush({ size: v })} />
             <div className="hidden sm:block">
               <Slider label="Softness" value={Math.round((1 - brush.hardness) * 100)} min={0} max={100} suffix="%" onChange={(v) => onBrush({ hardness: 1 - v / 100 })} />
             </div>
