@@ -611,6 +611,7 @@ export default function Editor({
           <DropZone onFile={loadBase} />
         ) : (
           <Stage
+            key={doc.baseSrc ?? "none"}
             doc={doc}
             tool={tool}
             selectedId={selectedId}
