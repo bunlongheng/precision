@@ -122,3 +122,33 @@ export const HelpIcon = (p: P) => (
     <path d="M9.5 9a2.5 2.5 0 013.9-2c1.3.9 1.1 2.3.1 3.1-.7.6-1.5 1-1.5 2M12 17h.01" />
   </Svg>
 );
+export const CropIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M6 2v16h16M2 6h16v16" />
+  </Svg>
+);
+export const RotateLeftIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 12a8 8 0 108-8H4m0 0l3.5-3.5M4 4l3.5 3.5" />
+  </Svg>
+);
+export const RotateRightIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M20 12a8 8 0 11-8-8h8m0 0l-3.5-3.5M20 4l-3.5 3.5" />
+  </Svg>
+);
+export const CheckIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M5 12l5 5L20 7" />
+  </Svg>
+);
+export const DropletIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 3s6 5.7 6 10a6 6 0 01-12 0c0-4.3 6-10 6-10z" />
+  </Svg>
+);
+export const BackIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M15 6l-6 6 6 6" />
+  </Svg>
+);

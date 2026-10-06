@@ -77,6 +77,10 @@ export type ImageResolver = (src: string) => HTMLImageElement | null;
 export type RenderMasks = {
   colorMask: HTMLCanvasElement | null;
   colorInked: boolean;
+  // Show the black & white base immediately while the color-splash look is
+  // active, even before any color has been painted back (live stage only - never
+  // set on export, or an unpainted photo would export gray).
+  colorPreview: boolean;
   blurMask: HTMLCanvasElement | null;
   blurInked: boolean;
   blurType: BlurType;
@@ -86,6 +90,7 @@ export type RenderMasks = {
 export const NO_MASKS: RenderMasks = {
   colorMask: null,
   colorInked: false,
+  colorPreview: false,
   blurMask: null,
   blurInked: false,
   blurType: "soft",
@@ -194,7 +199,7 @@ export function renderBase(
   if (doc.baseSrc) {
     const img = resolve(doc.baseSrc);
     if (img) {
-      if (masks.colorMask && masks.colorInked) {
+      if (masks.colorMask && (masks.colorInked || masks.colorPreview)) {
         // Black and white underneath...
         drawAdjusted(ctx, img, w, h, BW_ADJUST);
         // ...original color revealed only where the color mask has ink.

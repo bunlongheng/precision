@@ -5,9 +5,10 @@ import { CloseIcon } from "./icons";
 
 const TOOLS: [string, string][] = [
   ["Select & move", "Drag text and image layers; resize from the corner handle."],
-  ["Adjust & filters", "24 one-tap looks plus brightness, contrast, tint, blur and more."],
-  ["Color-splash brush", "The photo goes black & white - paint to bring the color back."],
-  ["Blur brush", "Paint to blur an area - soft, pixelate, or secure (scrambled)."],
+  ["Filters", "24 one-tap looks - or flick the photo to flip through them. Manual sliders (brightness, contrast, tint...) are there when you tap Adjust > show."],
+  ["Rotate & crop", "Turn the photo 90° and crop to any ratio (1:1, 4:5, 16:9...)."],
+  ["Color splash", "In Filters, tap Color splash: the photo goes black & white - brush the original color back (erase puts B&W back)."],
+  ["Blur", "In Filters, tap Blur: paint a soft, pixel, or secure (scrambled) blur onto any area."],
   ["Text", "Tap the canvas to drop a caption, then style it in the panel."],
   ["Image layer", "Stack a photo on top of your photo."],
 ];
@@ -16,7 +17,8 @@ const KEYS: [string, string][] = [
   ["Cmd / Ctrl + V", "Paste an image to start or add a layer"],
   ["Cmd / Ctrl + Z", "Undo"],
   ["Cmd / Ctrl + Shift + Z", "Redo"],
-  ["V A B T I", "Jump to a tool"],
+  ["V A C T I", "Jump to a tool (A = filters, C = rotate & crop)"],
+  ["B", "Color-splash brush"],
   ["Delete", "Remove the selected layer"],
 ];
 

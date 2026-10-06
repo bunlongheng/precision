@@ -1,4 +1,4 @@
-export type ToolId = "select" | "adjust" | "brush" | "text" | "image";
+export type ToolId = "select" | "adjust" | "crop" | "brush" | "text" | "image";
 
 // The brush paints one of two effects onto a mask:
 //  - color: the photo goes black & white, paint brings the original color back

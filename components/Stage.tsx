@@ -41,6 +41,25 @@ type Props = {
 };
 
 const PAD = 40;
+const MAX_ZOOM = 6;
+
+type View = { z: number; tx: number; ty: number };
+type Box = { w: number; h: number; pad: number };
+type Fit = { x: number; y: number; w: number; h: number };
+
+// Keep the photo centered at 1x and bounded (never flung off screen) when zoomed.
+// At z = 1 this returns { tx: 0, ty: 0 }, so filters/looks always stay centered.
+function clampTo(z: number, tx: number, ty: number, box: Box, fit: Fit): View {
+  const layoutLeft = box.pad + fit.x;
+  const layoutTop = box.pad + fit.y;
+  const wrapW = box.w + box.pad * 2;
+  const wrapH = box.h + box.pad * 2;
+  const sw = fit.w * z;
+  const sh = fit.h * z;
+  const nx = sw <= wrapW ? (wrapW - sw) / 2 - layoutLeft : clamp(tx, wrapW - sw - layoutLeft, -layoutLeft);
+  const ny = sh <= wrapH ? (wrapH - sh) / 2 - layoutTop : clamp(ty, wrapH - sh - layoutTop, -layoutTop);
+  return { z, tx: nx, ty: ny };
+}
 
 export default function Stage(props: Props) {
   const { doc, tool, resolve, imgVersion, masks, activeMaskRef, colorVersion, blurVersion } = props;
@@ -49,6 +68,8 @@ export default function Stage(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0, pad: PAD });
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
+  // Pan/zoom of the photo: z = scale multiplier (1 = fit), tx/ty = CSS-px offset.
+  const [view, setView] = useState<View>({ z: 1, tx: 0, ty: 0 });
 
   // Track the workspace size so the document is always centered and contained.
   // Phones get a tiny pad so the photo fills the space instead of floating small.
@@ -64,7 +85,7 @@ export default function Stage(props: Props) {
   }, []);
 
   const fit = fitContain(doc.width, doc.height, Math.max(1, box.w), Math.max(1, box.h));
-  const scale = fit.w / doc.width;
+  const scale = fit.w / doc.width; // doc px -> CSS px at zoom 1
   const cssFilter = buildFilterCSS(doc.adjust);
 
   // Recomposite the base canvas whenever anything visual changes.
@@ -78,18 +99,39 @@ export default function Stage(props: Props) {
     renderBase(ctx, doc, resolve, masks);
   }, [doc, resolve, imgVersion, masks, colorVersion, blurVersion]);
 
+  // Clamp for display so a resize never leaves the photo stranded off-center
+  // (Stage is keyed on the photo in the parent, so zoom resets on a new photo).
+  const shown = clampTo(view.z, view.tx, view.ty, box, fit);
+
+  // Refs the once-attached native touch/wheel listeners read for live values.
+  const live = useRef({ tool, hasBase: !!doc.baseSrc, props });
+  const viewRef = useRef(view);
+  const geomRef = useRef({ box, fit });
+  const touchCountRef = useRef(0);
+  useEffect(() => {
+    live.current = { tool, hasBase: !!doc.baseSrc, props };
+    viewRef.current = view;
+    geomRef.current = { box, fit };
+  });
+
+  // Clamp a candidate view against the live geometry (used by gesture handlers).
+  const clampView = useCallback(
+    (z: number, tx: number, ty: number): View => clampTo(z, tx, ty, geomRef.current.box, geomRef.current.fit),
+    [],
+  );
+
+  // Map a screen point to document coordinates. Reads the frame's live rect, so
+  // it stays correct through any pan/zoom transform (rect reflects the scale).
   const toDoc = useCallback(
     (clientX: number, clientY: number) => {
       const rect = frameRef.current!.getBoundingClientRect();
-      return {
-        x: (clientX - rect.left) / scale,
-        y: (clientY - rect.top) / scale,
-      };
+      const s = rect.width / doc.width;
+      return { x: (clientX - rect.left) / s, y: (clientY - rect.top) / s };
     },
-    [scale],
+    [doc.width],
   );
 
-  // --- Color-splash brush ---------------------------------------------------
+  // --- Brush ----------------------------------------------------------------
   const painting = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
 
@@ -136,68 +178,145 @@ export default function Stage(props: Props) {
   // Drag across the photo to live-scrub filters (Snapchat/Instagram). One filter
   // per ~54px of horizontal drag; the photo + name update as the finger moves.
   const STEP_PX = 54;
-  const swipe = useRef<{ x: number; steps: number; started: boolean } | null>(null); // mouse only
+  const swipe = useRef<{ x: number; steps: number; started: boolean } | null>(null); // mouse scrub
+  const mpan = useRef<{ sx: number; sy: number; v0: View } | null>(null); // mouse pan (zoomed)
   const press = useRef<{ x: number; y: number } | null>(null); // tap detection
 
-  // Latest values for the native touch listeners (attached once).
-  const live = useRef({ tool, hasBase: !!doc.baseSrc, props });
+  // Touch pinch-zoom + pan, and 1-finger scrub/pan, via native listeners
+  // (passive:false so preventDefault works and iOS delivers the moves). Pinch
+  // works in every mode; a 2nd finger cancels any in-progress brush stroke.
   useEffect(() => {
-    live.current = { tool, hasBase: !!doc.baseSrc, props };
-  });
-
-  // Touch swipe uses native listeners with passive:false so preventDefault works
-  // and iOS actually delivers the moves (React's touch handlers are passive).
-  useEffect(() => {
-    const el = wrapRef.current; // whole canvas area, so black margins swipe too
+    const el = wrapRef.current;
     if (!el) return;
-    let sx = 0, sy = 0, steps = 0, started = false, active = false;
+    let mode: "scrub" | "pan" | "pinch" | null = null;
+    let sx = 0, sy = 0, steps = 0, scrubStarted = false;
+    let d0 = 0;
+    let m0 = { x: 0, y: 0 };
+    let v0: View = { z: 1, tx: 0, ty: 0 };
+
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const mid = (t: TouchList) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+    const frameOrigin = () => {
+      const wr = el.getBoundingClientRect();
+      const g = geomRef.current;
+      return { x: wr.left + g.box.pad + g.fit.x, y: wr.top + g.box.pad + g.fit.y };
+    };
+    const cancelBrush = () => {
+      if (painting.current) {
+        painting.current = false;
+        last.current = null;
+        live.current.props.onBrushEnd();
+      }
+    };
+
     const start = (e: TouchEvent) => {
+      touchCountRef.current = e.touches.length;
       const L = live.current;
-      if (L.tool === "brush" || L.tool === "text" || !L.hasBase || e.touches.length !== 1) return;
-      // Only scrub from the open workspace / base photo - never from a touch that
-      // lands on an image or text layer (those drag to move instead).
-      if ((e.target as Element | null)?.closest?.("[data-layer]")) return;
-      sx = e.touches[0].clientX;
-      sy = e.touches[0].clientY;
-      steps = 0;
-      started = false;
-      active = true;
+      if (e.touches.length === 2) {
+        cancelBrush();
+        mode = "pinch";
+        d0 = dist(e.touches);
+        m0 = mid(e.touches);
+        v0 = { ...viewRef.current };
+        return;
+      }
+      if (e.touches.length === 1) {
+        if (!L.hasBase || L.tool === "brush" || L.tool === "text") { mode = null; return; }
+        if ((e.target as Element | null)?.closest?.("[data-layer]")) { mode = null; return; }
+        sx = e.touches[0].clientX;
+        sy = e.touches[0].clientY;
+        v0 = { ...viewRef.current };
+        steps = 0;
+        scrubStarted = false;
+        mode = viewRef.current.z > 1 ? "pan" : "scrub";
+      }
     };
+
     const move = (e: TouchEvent) => {
-      if (!active) return;
-      const dx = e.touches[0].clientX - sx;
-      const dy = e.touches[0].clientY - sy;
-      if (Math.abs(dx) < 14 || Math.abs(dx) < Math.abs(dy) * 1.1) return;
+      if (mode === "pinch") {
+        if (e.touches.length < 2) return;
+        e.preventDefault();
+        const d = dist(e.touches);
+        const m = mid(e.touches);
+        const fo = frameOrigin();
+        const nz = clamp((v0.z * d) / (d0 || 1), 1, MAX_ZOOM);
+        const lx = (m0.x - fo.x - v0.tx) / v0.z;
+        const ly = (m0.y - fo.y - v0.ty) / v0.z;
+        setView(clampView(nz, m.x - fo.x - nz * lx, m.y - fo.y - nz * ly));
+        return;
+      }
+      if (mode === "pan") {
+        if (e.touches.length !== 1) return;
+        e.preventDefault();
+        setView(clampView(viewRef.current.z, v0.tx + (e.touches[0].clientX - sx), v0.ty + (e.touches[0].clientY - sy)));
+        return;
+      }
+      if (mode === "scrub") {
+        if (e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - sx;
+        const dy = e.touches[0].clientY - sy;
+        if (Math.abs(dx) < 14 || Math.abs(dx) < Math.abs(dy) * 1.1) return;
+        e.preventDefault();
+        if (!scrubStarted) {
+          scrubStarted = true;
+          live.current.props.onScrubStart();
+        }
+        const st = Math.round(-dx / STEP_PX);
+        if (st !== steps) {
+          steps = st;
+          live.current.props.onScrub(st);
+        }
+      }
+    };
+
+    const end = (e: TouchEvent) => {
+      touchCountRef.current = e.touches.length;
+      if (mode === "scrub" && scrubStarted) live.current.props.onScrubEnd();
+      // Lifting one finger of a pinch: keep panning with the remaining finger so
+      // the photo doesn't jump.
+      if (mode === "pinch" && e.touches.length === 1) {
+        const L = live.current;
+        if (L.tool !== "brush" && L.tool !== "text" && viewRef.current.z > 1) {
+          sx = e.touches[0].clientX;
+          sy = e.touches[0].clientY;
+          v0 = { ...viewRef.current };
+          mode = "pan";
+          return;
+        }
+      }
+      if (e.touches.length === 0) mode = null;
+    };
+
+    // Trackpad / mouse wheel zoom, focused on the cursor.
+    const wheel = (e: WheelEvent) => {
+      if (!live.current.hasBase) return;
       e.preventDefault();
-      if (!started) {
-        started = true;
-        live.current.props.onScrubStart();
-      }
-      const st = Math.round(-dx / STEP_PX);
-      if (st !== steps) {
-        steps = st;
-        live.current.props.onScrub(st);
-      }
+      const fo = frameOrigin();
+      const v = viewRef.current;
+      const nz = clamp(v.z * Math.exp(-e.deltaY * 0.0015), 1, MAX_ZOOM);
+      const lx = (e.clientX - fo.x - v.tx) / v.z;
+      const ly = (e.clientY - fo.y - v.ty) / v.z;
+      setView(clampView(nz, e.clientX - fo.x - nz * lx, e.clientY - fo.y - nz * ly));
     };
-    const end = () => {
-      if (active && started) live.current.props.onScrubEnd();
-      active = false;
-    };
+
     el.addEventListener("touchstart", start, { passive: true });
     el.addEventListener("touchmove", move, { passive: false });
     el.addEventListener("touchend", end, { passive: true });
     el.addEventListener("touchcancel", end, { passive: true });
+    el.addEventListener("wheel", wheel, { passive: false });
     return () => {
       el.removeEventListener("touchstart", start);
       el.removeEventListener("touchmove", move);
       el.removeEventListener("touchend", end);
       el.removeEventListener("touchcancel", end);
+      el.removeEventListener("wheel", wheel);
     };
-  }, []);
+  }, [clampView]);
 
   const framePointerDown = (e: RPointerEvent<HTMLDivElement>) => {
     const { x, y } = toDoc(e.clientX, e.clientY);
     if (tool === "brush" && doc.baseSrc) {
+      if (touchCountRef.current >= 2) return; // let a pinch take over
       e.preventDefault();
       (e.target as Element).setPointerCapture?.(e.pointerId);
       painting.current = true;
@@ -214,8 +333,9 @@ export default function Stage(props: Props) {
     if (e.target === frameRef.current || e.target === canvasRef.current) {
       press.current = { x: e.clientX, y: e.clientY };
       if (e.pointerType === "mouse") {
-        swipe.current = { x: e.clientX, steps: 0, started: false };
         (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+        if (shown.z > 1) mpan.current = { sx: e.clientX, sy: e.clientY, v0: { ...shown } };
+        else swipe.current = { x: e.clientX, steps: 0, started: false };
       }
     }
   };
@@ -224,10 +344,14 @@ export default function Stage(props: Props) {
     if (tool === "brush") {
       const { x, y } = toDoc(e.clientX, e.clientY);
       setCursor({ x, y });
-      if (painting.current) {
+      if (painting.current && touchCountRef.current < 2) {
         strokeTo(x, y, e.pressure, e.pointerType === "pen");
         props.onBrushPaint();
       }
+      return;
+    }
+    if (mpan.current) {
+      setView(clampView(viewRef.current.z, mpan.current.v0.tx + (e.clientX - mpan.current.sx), mpan.current.v0.ty + (e.clientY - mpan.current.sy)));
       return;
     }
     const s = swipe.current; // mouse scrub only (touch handled natively)
@@ -253,16 +377,19 @@ export default function Stage(props: Props) {
     }
     const s = swipe.current;
     swipe.current = null;
+    const panned = !!mpan.current;
+    mpan.current = null;
     if (s?.started) props.onScrubEnd();
     const pr = press.current;
     press.current = null;
-    if (pr && !s?.started && Math.abs(e.clientX - pr.x) < 8 && Math.abs(e.clientY - pr.y) < 8) {
+    if (pr && !s?.started && !panned && Math.abs(e.clientX - pr.x) < 8 && Math.abs(e.clientY - pr.y) < 8) {
       props.onSelect(null); // a tap deselects
       props.onEditingChange(null);
     }
   };
 
   const brushActive = tool === "brush" && !!doc.baseSrc;
+  const zoomed = shown.z > 1.01;
 
   return (
     <div
@@ -278,9 +405,11 @@ export default function Stage(props: Props) {
           top: box.pad + fit.y,
           width: fit.w,
           height: fit.h,
+          transform: `translate(${shown.tx}px, ${shown.ty}px) scale(${shown.z})`,
+          transformOrigin: "0 0",
           boxShadow: "var(--shadow)",
           touchAction: "none",
-          cursor: brushActive ? "none" : tool === "text" ? "text" : "default",
+          cursor: brushActive ? "none" : zoomed ? "grab" : tool === "text" ? "text" : "default",
         }}
         onPointerDown={framePointerDown}
         onPointerMove={framePointerMove}
@@ -334,6 +463,18 @@ export default function Stage(props: Props) {
           />
         )}
       </div>
+
+      {/* Zoom badge + reset (pinch, or wheel/trackpad, to zoom; drag to pan) */}
+      {zoomed && (
+        <button
+          type="button"
+          onClick={() => setView({ z: 1, tx: 0, ty: 0 })}
+          className="mono absolute bottom-3 right-3 z-20 rounded-full px-3 py-1.5 text-[12px] font-semibold shadow-lg"
+          style={{ background: "var(--accent)", color: "var(--accent-ink)", paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))" }}
+        >
+          {Math.round(shown.z * 100)}% · Reset
+        </button>
+      )}
     </div>
   );
 }

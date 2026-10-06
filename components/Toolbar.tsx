@@ -1,12 +1,14 @@
 "use client";
 
 import type { ToolId } from "./editor-types";
-import { CursorIcon, SlidersIcon, BrushIcon, TextIcon, ImageIcon } from "./icons";
+import { CursorIcon, SlidersIcon, CropIcon, TextIcon, ImageIcon } from "./icons";
 
+// The color-splash and blur brushes are not toolbar tools - they are picked as
+// looks inside the Filters panel, so they stay separate features.
 const TOOLS: { id: ToolId; label: string; Icon: typeof CursorIcon; key: string }[] = [
   { id: "select", label: "Select & move", Icon: CursorIcon, key: "V" },
-  { id: "adjust", label: "Adjust & filters", Icon: SlidersIcon, key: "A" },
-  { id: "brush", label: "Brush (color splash & blur)", Icon: BrushIcon, key: "B" },
+  { id: "adjust", label: "Filters", Icon: SlidersIcon, key: "A" },
+  { id: "crop", label: "Rotate & crop", Icon: CropIcon, key: "C" },
   { id: "text", label: "Add text", Icon: TextIcon, key: "T" },
   { id: "image", label: "Add image layer", Icon: ImageIcon, key: "I" },
 ];
